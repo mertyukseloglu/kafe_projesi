@@ -102,3 +102,145 @@ export interface SessionUser {
   tenantId?: string
   tenantSlug?: string
 }
+
+// ==========================================
+// MENÜ TİPLERİ
+// ==========================================
+
+export interface Category {
+  id: string
+  name: string
+  description?: string
+  sortOrder: number
+  isActive: boolean
+  tenantId: string
+}
+
+export interface MenuItem {
+  id: string
+  name: string
+  description: string
+  price: number
+  image?: string
+  categoryId: string
+  category?: Category
+  tags?: string[]
+  allergens?: Allergen[]
+  isAvailable: boolean
+  tenantId: string
+}
+
+// Müşteri arayüzü için basitleştirilmiş menü item
+export interface MenuItemPublic {
+  id: string
+  name: string
+  description: string
+  price: number
+  image?: string
+  category: string
+  categoryId: string
+  tags?: string[]
+}
+
+// ==========================================
+// SEPET TİPLERİ
+// ==========================================
+
+export interface CartItem extends MenuItemPublic {
+  quantity: number
+  notes?: string
+}
+
+export interface Cart {
+  items: CartItem[]
+  total: number
+  itemCount: number
+}
+
+// ==========================================
+// SİPARİŞ TİPLERİ
+// ==========================================
+
+export interface OrderItemInput {
+  menuItemId: string
+  name: string
+  price: number
+  quantity: number
+  notes?: string
+}
+
+export interface CreateOrderInput {
+  tenantSlug: string
+  tableNumber?: string
+  items: OrderItemInput[]
+  customerName?: string
+  customerPhone?: string
+  notes?: string
+}
+
+export interface OrderItem {
+  id: string
+  orderId: string
+  menuItemId: string
+  name: string
+  price: number
+  quantity: number
+  notes?: string
+}
+
+export interface Order {
+  id: string
+  orderNumber: string
+  tenantId: string
+  tableId?: string
+  tableNumber?: string
+  customerId?: string
+  status: OrderStatus
+  items: OrderItem[]
+  subtotal: number
+  tax: number
+  total: number
+  notes?: string
+  paymentStatus: PaymentStatus
+  createdAt: Date
+  updatedAt: Date
+}
+
+// ==========================================
+// TENANT TİPLERİ
+// ==========================================
+
+export interface Tenant {
+  id: string
+  name: string
+  slug: string
+  logo?: string
+  primaryColor?: string
+  phone?: string
+  email?: string
+  address?: string
+  isActive: boolean
+  settings?: TenantSettings
+}
+
+export interface TenantPublic {
+  id: string
+  name: string
+  slug: string
+  logo?: string
+  primaryColor?: string
+  phone?: string
+}
+
+// ==========================================
+// MASA TİPLERİ
+// ==========================================
+
+export interface Table {
+  id: string
+  number: string
+  name?: string
+  qrCode: string
+  isActive: boolean
+  tenantId: string
+}
