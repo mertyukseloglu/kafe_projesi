@@ -1,0 +1,432 @@
+// Prisma Schema - AI Restaurant Platform
+// Multi-tenant SaaS mimarisi
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== ENUMS ====================
+
+enum UserRole {
+  SUPER_ADMIN    // Platform sahibi
+  TENANT_ADMIN   // Restoran sahibi
+  MANAGER        // Restoran müdürü
+  STAFF          // Personel (garson, kasiyer)
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  EXPIRED
+}
+
+enum OrderStatus {
+  PENDING      // Yeni sipariş
+  CONFIRMED    // Onaylandı
+  PREPARING    // Hazırlanıyor
+  READY        // Hazır
+  DELIVERED    // Teslim edildi
+  CANCELLED    // İptal edildi
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+// ==================== TENANT (RESTORAN) ====================
+
+model Tenant {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique // URL için: menu.platform.com/[slug]
+  description String?
+  logo        String?
+  coverImage  String?
+
+  // İletişim
+  phone       String?
+  email       String?
+  address     String?
+  city        String?
+  district    String?
+
+  // Ayarlar (JSON)
+  settings    Json     @default("{}")
+  // { workingHours, theme, currency, language, aiSettings }
+
+  // Durum
+  isActive    Boolean  @default(true)
+
+  // Zaman damgaları
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // İlişkiler
+  users         User[]
+  categories    Category[]
+  menuItems     MenuItem[]
+  tables        Table[]
+  orders        Order[]
+  customers     Customer[]
+  subscription  Subscription?
+
+  @@index([slug])
+  @@index([isActive])
+}
+
+// ==================== USER (KULLANICI) ====================
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  passwordHash  String
+  name          String
+  phone         String?
+  avatar        String?
+
+  role          UserRole @default(STAFF)
+  permissions   Json     @default("[]") // Özel yetkiler
+
+  // Tenant ilişkisi (SUPER_ADMIN için null)
+  tenantId      String?
+  tenant        Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  isActive      Boolean  @default(true)
+  lastLoginAt   DateTime?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([email])
+  @@index([tenantId])
+  @@index([role])
+}
+
+// ==================== SUBSCRIPTION (ABONELİK) ====================
+
+model SubscriptionPlan {
+  id            String   @id @default(cuid())
+  name          String   // Starter, Growth, Pro
+  slug          String   @unique
+  description   String?
+
+  price         Decimal  @db.Decimal(10, 2) // Aylık fiyat (TL)
+  yearlyPrice   Decimal? @db.Decimal(10, 2) // Yıllık fiyat
+
+  // Limitler
+  maxOrders     Int      @default(-1) // -1 = sınırsız
+  maxTables     Int      @default(-1)
+  maxAiRequests Int      @default(-1)
+  maxStaff      Int      @default(-1)
+
+  // Özellikler
+  features      Json     @default("[]")
+  // ["analytics", "loyalty", "multiLanguage", "customBranding"]
+
+  isActive      Boolean  @default(true)
+  sortOrder     Int      @default(0)
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  subscriptions Subscription[]
+}
+
+model Subscription {
+  id                  String             @id @default(cuid())
+
+  tenantId            String             @unique
+  tenant              Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  planId              String
+  plan                SubscriptionPlan   @relation(fields: [planId], references: [id])
+
+  status              SubscriptionStatus @default(TRIAL)
+
+  // Dönem bilgileri
+  currentPeriodStart  DateTime           @default(now())
+  currentPeriodEnd    DateTime
+  trialEndsAt         DateTime?
+
+  // Kullanım sayaçları (aylık sıfırlanır)
+  ordersUsed          Int                @default(0)
+  aiRequestsUsed      Int                @default(0)
+
+  cancelledAt         DateTime?
+  cancelReason        String?
+
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  payments            Payment[]
+
+  @@index([status])
+  @@index([currentPeriodEnd])
+}
+
+model Payment {
+  id              String        @id @default(cuid())
+
+  subscriptionId  String
+  subscription    Subscription  @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  amount          Decimal       @db.Decimal(10, 2)
+  currency        String        @default("TRY")
+  status          PaymentStatus @default(PENDING)
+
+  // Ödeme gateway bilgileri
+  gatewayId       String?       // iyzico, stripe vb. referans ID
+  gatewayResponse Json?
+
+  invoiceNumber   String?
+  invoiceUrl      String?
+
+  paidAt          DateTime?
+  failedAt        DateTime?
+  refundedAt      DateTime?
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([subscriptionId])
+  @@index([status])
+}
+
+// ==================== MENU ====================
+
+model Category {
+  id          String     @id @default(cuid())
+
+  tenantId    String
+  tenant      Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  name        String
+  description String?
+  image       String?
+  icon        String?    // Lucide icon adı
+
+  sortOrder   Int        @default(0)
+  isActive    Boolean    @default(true)
+
+  // Zaman bazlı görünürlük (örn: kahvaltı menüsü)
+  availableFrom String?  // "08:00"
+  availableTo   String?  // "11:00"
+
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  menuItems   MenuItem[]
+
+  @@index([tenantId])
+  @@index([sortOrder])
+}
+
+model MenuItem {
+  id          String   @id @default(cuid())
+
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  categoryId  String
+  category    Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  name        String
+  description String?
+  price       Decimal  @db.Decimal(10, 2)
+  image       String?
+
+  // Ek bilgiler
+  calories    Int?
+  prepTime    Int?     // Hazırlık süresi (dakika)
+
+  // Alerjenler
+  allergens   Json     @default("[]")
+  // ["gluten", "dairy", "nuts", "shellfish", "eggs", "soy"]
+
+  // Etiketler
+  tags        Json     @default("[]")
+  // ["vegan", "vegetarian", "spicy", "popular", "new"]
+
+  // Varyasyonlar ve ekstralar
+  variations  Json     @default("[]")
+  // [{ name: "Boyut", options: [{ name: "Küçük", price: 0 }, { name: "Büyük", price: 10 }] }]
+
+  extras      Json     @default("[]")
+  // [{ name: "Ekstra peynir", price: 5 }, { name: "Sos", price: 3 }]
+
+  sortOrder   Int      @default(0)
+  isAvailable Boolean  @default(true)
+  isFeatured  Boolean  @default(false)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  orderItems  OrderItem[]
+
+  @@index([tenantId])
+  @@index([categoryId])
+  @@index([isAvailable])
+}
+
+// ==================== TABLE (MASA) ====================
+
+model Table {
+  id          String   @id @default(cuid())
+
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  number      String   // "1", "A1", "Teras-3"
+  area        String?  // "İç Mekan", "Bahçe", "Teras"
+  capacity    Int      @default(4)
+
+  qrCode      String?  // QR kod URL veya data
+
+  isActive    Boolean  @default(true)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  orders      Order[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId])
+}
+
+// ==================== ORDER (SİPARİŞ) ====================
+
+model Order {
+  id          String      @id @default(cuid())
+  orderNumber String      // Görüntüleme için: "S001"
+
+  tenantId    String
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  tableId     String?
+  table       Table?      @relation(fields: [tableId], references: [id], onDelete: SetNull)
+
+  customerId  String?
+  customer    Customer?   @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  status      OrderStatus @default(PENDING)
+
+  // Fiyatlandırma
+  subtotal    Decimal     @db.Decimal(10, 2)
+  discount    Decimal     @default(0) @db.Decimal(10, 2)
+  total       Decimal     @db.Decimal(10, 2)
+
+  // Notlar
+  notes       String?
+
+  // Ödeme
+  paymentStatus PaymentStatus @default(PENDING)
+  paymentMethod String?     // "cash", "card", "online"
+
+  // AI etkileşim logu (opsiyonel)
+  aiInteraction Json?
+
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  completedAt DateTime?
+
+  items       OrderItem[]
+
+  @@index([tenantId])
+  @@index([tableId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model OrderItem {
+  id          String   @id @default(cuid())
+
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  menuItemId  String
+  menuItem    MenuItem @relation(fields: [menuItemId], references: [id])
+
+  quantity    Int      @default(1)
+  unitPrice   Decimal  @db.Decimal(10, 2)
+  totalPrice  Decimal  @db.Decimal(10, 2)
+
+  // Seçilen varyasyon ve ekstralar
+  selectedVariations Json @default("[]")
+  selectedExtras     Json @default("[]")
+
+  notes       String?
+
+  createdAt   DateTime @default(now())
+
+  @@index([orderId])
+  @@index([menuItemId])
+}
+
+// ==================== CUSTOMER (MÜŞTERİ) ====================
+
+model Customer {
+  id          String   @id @default(cuid())
+
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  phone       String?
+  email       String?
+  name        String?
+
+  // Sadakat programı
+  loyaltyPoints Int    @default(0)
+  totalSpent    Decimal @default(0) @db.Decimal(10, 2)
+  visitCount    Int     @default(0)
+
+  // Tercihler
+  preferences   Json    @default("{}")
+  // { allergens: [], favorites: [], language: "tr" }
+
+  // Etiketler
+  tags          Json    @default("[]")
+  // ["vip", "regular", "new"]
+
+  lastVisitAt   DateTime?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  orders        Order[]
+
+  @@unique([tenantId, phone])
+  @@unique([tenantId, email])
+  @@index([tenantId])
+}
+
+// ==================== PLATFORM SETTINGS ====================
+
+model PlatformSettings {
+  id          String   @id @default("default")
+
+  name        String   @default("AI Restaurant Platform")
+  logo        String?
+
+  // API Keys (encrypted olmalı production'da)
+  aiProvider  String   @default("claude") // "openai" veya "claude"
+
+  // Varsayılan ayarlar
+  defaultTrialDays    Int @default(14)
+  defaultCurrency     String @default("TRY")
+  defaultLanguage     String @default("tr")
+
+  // Email şablonları vb.
+  settings    Json     @default("{}")
+
+  updatedAt   DateTime @updatedAt
+}
