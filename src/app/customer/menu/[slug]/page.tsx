@@ -1,10 +1,10 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { ShoppingCart, Plus, Minus, X, MessageCircle, Phone } from "lucide-react"
+import { ShoppingCart, Plus, Minus, X, MessageCircle, Phone, Send, Loader2 } from "lucide-react"
 
 // Tip tanımları
 interface MenuItem {
@@ -24,6 +24,11 @@ interface CartItem extends MenuItem {
 interface Category {
   id: string
   name: string
+}
+
+interface ChatMessage {
+  role: "user" | "assistant"
+  content: string
 }
 
 // Demo veriler (gerçek projede API'den gelecek)
@@ -142,6 +147,12 @@ export default function CustomerMenuPage({ params }: CustomerMenuPageProps) {
   const [isChatOpen, setIsChatOpen] = useState(false)
   const [orderSent, setOrderSent] = useState(false)
 
+  // Chat state
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
+  const [chatInput, setChatInput] = useState("")
+  const [isChatLoading, setIsChatLoading] = useState(false)
+  const chatContainerRef = useRef<HTMLDivElement>(null)
+
   useEffect(() => {
     params.then((p) => setSlug(p.slug))
   }, [params])
@@ -247,6 +258,75 @@ export default function CustomerMenuPage({ params }: CustomerMenuPageProps) {
     } catch {
       // API bağlantı hatası - demo mode
       alert("Garson çağrıldı! Masa: " + (tableNumber || "Belirtilmedi"))
+    }
+  }
+
+  // Chat mesajı gönderme
+  const sendChatMessage = async () => {
+    if (!chatInput.trim() || isChatLoading) return
+
+    const userMessage: ChatMessage = { role: "user", content: chatInput.trim() }
+    setChatMessages(prev => [...prev, userMessage])
+    setChatInput("")
+    setIsChatLoading(true)
+
+    // Scroll to bottom
+    setTimeout(() => {
+      chatContainerRef.current?.scrollTo({
+        top: chatContainerRef.current.scrollHeight,
+        behavior: "smooth"
+      })
+    }, 100)
+
+    try {
+      const response = await fetch("/api/public/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tenantSlug: slug,
+          message: userMessage.content,
+          conversationHistory: chatMessages,
+          menuContext: {
+            categories: demoCategories.filter(c => c.id !== "all").map(c => c.name),
+            items: demoMenuItems.map(item => ({
+              name: item.name,
+              price: item.price,
+              category: demoCategories.find(c => c.id === item.category)?.name || item.category,
+              description: item.description,
+            })),
+          },
+        }),
+      })
+
+      const data = await response.json()
+
+      if (data.success && data.data?.reply) {
+        const assistantMessage: ChatMessage = { role: "assistant", content: data.data.reply }
+        setChatMessages(prev => [...prev, assistantMessage])
+      } else {
+        // Fallback response
+        const fallbackMessage: ChatMessage = {
+          role: "assistant",
+          content: "Üzgünüm, şu anda yanıt veremiyorum. Lütfen garson çağırın veya tekrar deneyin."
+        }
+        setChatMessages(prev => [...prev, fallbackMessage])
+      }
+    } catch {
+      // API error - use fallback
+      const fallbackMessage: ChatMessage = {
+        role: "assistant",
+        content: "Bağlantı hatası oluştu. Menümüzde sıcak içecekler, soğuk içecekler, tatlılar ve atıştırmalıklar bulunmaktadır. Size yardımcı olmak için garson çağırabilirsiniz."
+      }
+      setChatMessages(prev => [...prev, fallbackMessage])
+    } finally {
+      setIsChatLoading(false)
+      // Scroll to bottom after response
+      setTimeout(() => {
+        chatContainerRef.current?.scrollTo({
+          top: chatContainerRef.current.scrollHeight,
+          behavior: "smooth"
+        })
+      }, 100)
     }
   }
 
@@ -503,7 +583,8 @@ export default function CustomerMenuPage({ params }: CustomerMenuPageProps) {
               <X className="h-4 w-4" />
             </Button>
           </div>
-          <div className="h-64 overflow-y-auto p-4">
+          <div ref={chatContainerRef} className="h-64 overflow-y-auto p-4 space-y-3">
+            {/* Welcome Message */}
             <div className="rounded-lg bg-muted p-3 text-sm">
               Merhaba! Ben {restaurantName} sipariş asistanıyım. Size nasıl yardımcı olabilirim?
               <ul className="mt-2 space-y-1 text-muted-foreground">
@@ -512,16 +593,48 @@ export default function CustomerMenuPage({ params }: CustomerMenuPageProps) {
                 <li>• Sipariş verebilirsiniz</li>
               </ul>
             </div>
+
+            {/* Chat Messages */}
+            {chatMessages.map((msg, index) => (
+              <div
+                key={index}
+                className={`rounded-lg p-3 text-sm ${
+                  msg.role === "user"
+                    ? "ml-8 bg-primary text-primary-foreground"
+                    : "mr-8 bg-muted"
+                }`}
+              >
+                {msg.content}
+              </div>
+            ))}
+
+            {/* Loading indicator */}
+            {isChatLoading && (
+              <div className="mr-8 rounded-lg bg-muted p-3 text-sm">
+                <Loader2 className="h-4 w-4 animate-spin" />
+              </div>
+            )}
           </div>
           <div className="border-t p-3">
-            <div className="flex gap-2">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                sendChatMessage()
+              }}
+              className="flex gap-2"
+            >
               <input
                 type="text"
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
                 placeholder="Mesajınızı yazın..."
                 className="flex-1 rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                disabled={isChatLoading}
               />
-              <Button size="sm">Gönder</Button>
-            </div>
+              <Button size="sm" type="submit" disabled={isChatLoading || !chatInput.trim()}>
+                {isChatLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              </Button>
+            </form>
           </div>
         </div>
       )}
