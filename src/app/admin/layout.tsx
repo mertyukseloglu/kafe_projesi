@@ -2,7 +2,8 @@
 
 import { ReactNode, useState } from "react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
+import { useSession, signOut } from "next-auth/react"
 import {
   LayoutDashboard,
   Store,
@@ -14,6 +15,7 @@ import {
   Bell,
   ChevronDown,
   Shield,
+  LogOut,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
@@ -31,7 +33,18 @@ const navItems = [
 
 export default function SuperAdminLayout({ children }: SuperAdminLayoutProps) {
   const pathname = usePathname()
+  const router = useRouter()
+  const { data: session } = useSession()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
+
+  const userName = session?.user?.name || "Super Admin"
+  const userInitials = userName.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)
+
+  const handleLogout = async () => {
+    await signOut({ redirect: false })
+    router.push("/login")
+  }
 
   return (
     <div className="min-h-screen bg-slate-900">
@@ -120,13 +133,49 @@ export default function SuperAdminLayout({ children }: SuperAdminLayoutProps) {
               <Bell className="h-5 w-5" />
             </Button>
 
-            <button className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-slate-300 hover:bg-slate-700">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-sm font-medium text-primary-foreground">
-                SA
-              </div>
-              <span className="hidden text-sm md:block">Super Admin</span>
-              <ChevronDown className="h-4 w-4 text-slate-500" />
-            </button>
+            <div className="relative">
+              <button
+                className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-slate-300 hover:bg-slate-700"
+                onClick={() => setUserMenuOpen(!userMenuOpen)}
+              >
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-sm font-medium text-primary-foreground">
+                  {userInitials}
+                </div>
+                <span className="hidden text-sm md:block">{userName}</span>
+                <ChevronDown className="h-4 w-4 text-slate-500" />
+              </button>
+
+              {/* Dropdown menu */}
+              {userMenuOpen && (
+                <>
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setUserMenuOpen(false)}
+                  />
+                  <div className="absolute right-0 top-full z-50 mt-1 w-48 rounded-lg border border-slate-700 bg-slate-800 p-1 shadow-lg">
+                    <div className="border-b border-slate-700 px-3 py-2">
+                      <p className="text-sm font-medium text-white">{userName}</p>
+                      <p className="text-xs text-slate-400">{session?.user?.email}</p>
+                    </div>
+                    <Link
+                      href="/admin/settings"
+                      className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-slate-300 hover:bg-slate-700"
+                      onClick={() => setUserMenuOpen(false)}
+                    >
+                      <Settings className="h-4 w-4" />
+                      Ayarlar
+                    </Link>
+                    <button
+                      onClick={handleLogout}
+                      className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-red-400 hover:bg-red-500/10"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      Çıkış Yap
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </header>
 

@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client"
+import bcrypt from "bcryptjs"
 
 const prisma = new PrismaClient()
 
@@ -378,13 +379,13 @@ async function main() {
   console.log("✅ Tables created")
 
   // Super Admin kullanıcısı
-  // Not: Gerçek projede şifre hash'lenmeli (bcrypt)
+  const adminPasswordHash = await bcrypt.hash("admin123", 12)
   await prisma.user.upsert({
     where: { email: "admin@platform.com" },
-    update: {},
+    update: { passwordHash: adminPasswordHash },
     create: {
       email: "admin@platform.com",
-      passwordHash: "CHANGE_ME_IN_PRODUCTION", // bcrypt.hash("admin123", 10)
+      passwordHash: adminPasswordHash,
       name: "Platform Admin",
       role: "SUPER_ADMIN",
       tenantId: null,
@@ -392,12 +393,13 @@ async function main() {
   })
 
   // Demo tenant admin
+  const demoPasswordHash = await bcrypt.hash("demo123", 12)
   await prisma.user.upsert({
-    where: { email: "demo@demo-kafe.com" },
-    update: {},
+    where: { email: "demo@kafe.com" },
+    update: { passwordHash: demoPasswordHash },
     create: {
-      email: "demo@demo-kafe.com",
-      passwordHash: "CHANGE_ME_IN_PRODUCTION", // bcrypt.hash("demo123", 10)
+      email: "demo@kafe.com",
+      passwordHash: demoPasswordHash,
       name: "Demo Kafe Admin",
       role: "TENANT_ADMIN",
       tenantId: demoTenant.id,
@@ -433,8 +435,8 @@ async function main() {
   console.log("\n🎉 Seeding completed!")
   console.log("\n📝 Demo bilgileri:")
   console.log("   Menü URL: /customer/menu/demo-kafe?table=1")
-  console.log("   Admin Email: admin@platform.com")
-  console.log("   Tenant Admin Email: demo@demo-kafe.com")
+  console.log("   Super Admin: admin@platform.com / admin123")
+  console.log("   Restaurant: demo@kafe.com / demo123")
 }
 
 main()

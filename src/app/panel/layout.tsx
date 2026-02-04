@@ -2,7 +2,8 @@
 
 import { ReactNode, useState } from "react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
+import { useSession, signOut } from "next-auth/react"
 import {
   LayoutDashboard,
   ClipboardList,
@@ -18,9 +19,6 @@ import {
   ChevronDown,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-
-// Tenant Layout - Restoran yönetim paneli
-// TODO: Auth kontrolü eklenecek (TENANT_ADMIN, MANAGER, STAFF)
 
 interface TenantLayoutProps {
   children: ReactNode
@@ -38,13 +36,26 @@ const navItems = [
 
 export default function TenantLayout({ children }: TenantLayoutProps) {
   const pathname = usePathname()
+  const router = useRouter()
+  const { data: session } = useSession()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [activeOrders] = useState(3) // Demo: aktif sipariş sayısı
 
-  // Demo restoran bilgisi (gerçekte session'dan gelecek)
+  // Session'dan restoran bilgisi veya demo fallback
   const restaurant = {
-    name: "Demo Kafe",
-    slug: "demo-kafe",
+    name: session?.user?.tenantSlug ?
+      session.user.tenantSlug.split("-").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ") :
+      "Demo Kafe",
+    slug: session?.user?.tenantSlug || "demo-kafe",
+  }
+
+  const userName = session?.user?.name || "Kullanıcı"
+  const userInitials = userName.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)
+
+  const handleLogout = async () => {
+    await signOut({ redirect: false })
+    router.push("/login")
   }
 
   return (
@@ -155,13 +166,49 @@ export default function TenantLayout({ children }: TenantLayoutProps) {
             </Button>
 
             {/* User menu */}
-            <button className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-accent">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-sm font-medium">
-                RS
-              </div>
-              <span className="hidden text-sm md:block">Restoran Sahibi</span>
-              <ChevronDown className="h-4 w-4 text-muted-foreground" />
-            </button>
+            <div className="relative">
+              <button
+                className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-accent"
+                onClick={() => setUserMenuOpen(!userMenuOpen)}
+              >
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-sm font-medium">
+                  {userInitials}
+                </div>
+                <span className="hidden text-sm md:block">{userName}</span>
+                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+              </button>
+
+              {/* Dropdown menu */}
+              {userMenuOpen && (
+                <>
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setUserMenuOpen(false)}
+                  />
+                  <div className="absolute right-0 top-full z-50 mt-1 w-48 rounded-lg border bg-card p-1 shadow-lg">
+                    <div className="border-b px-3 py-2">
+                      <p className="text-sm font-medium">{userName}</p>
+                      <p className="text-xs text-muted-foreground">{session?.user?.email}</p>
+                    </div>
+                    <Link
+                      href="/panel/settings"
+                      className="flex items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-accent"
+                      onClick={() => setUserMenuOpen(false)}
+                    >
+                      <Settings className="h-4 w-4" />
+                      Ayarlar
+                    </Link>
+                    <button
+                      onClick={handleLogout}
+                      className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-destructive hover:bg-destructive/10"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      Çıkış Yap
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </header>
 
