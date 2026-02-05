@@ -4,6 +4,7 @@ import { createOrderSchema } from "@/lib/validations/order"
 import { notifyNewOrder } from "@/lib/pusher"
 import { logOrderCreate } from "@/lib/services/activity"
 import { addLoyaltyPoints } from "@/lib/services/loyalty"
+import { sendOrderNotification } from "@/lib/email"
 import type { ApiResponse, Order } from "@/types"
 
 // Sipariş numarası oluştur
@@ -188,6 +189,22 @@ export async function POST(
           }
         })
         .catch((err) => console.error("Loyalty points error:", err))
+    }
+
+    // Email bildirim gönder (restoran sahibine)
+    if (tenant.email) {
+      sendOrderNotification(tenant.email, {
+        orderNumber: order.orderNumber,
+        restaurantName: tenant.name,
+        tableNumber: tableNumber || undefined,
+        items: items.map((item) => ({
+          name: item.name || "Ürün",
+          quantity: item.quantity,
+          price: item.price,
+        })),
+        total: subtotal,
+        customerName: customerName || undefined,
+      }).catch((err) => console.error("Email notification error:", err))
     }
 
     return NextResponse.json(

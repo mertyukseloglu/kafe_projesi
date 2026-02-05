@@ -194,6 +194,66 @@ export async function GET(request: NextRequest) {
         .sort((a, b) => b.quantity - a.quantity)
         .slice(0, 10)
 
+      // Hourly stats
+      const hourlyMap = new Map<number, { orders: number; revenue: number }>()
+      orders.forEach((order) => {
+        const hour = order.createdAt.getHours()
+        const existing = hourlyMap.get(hour) || { orders: 0, revenue: 0 }
+        hourlyMap.set(hour, {
+          orders: existing.orders + 1,
+          revenue: existing.revenue + Number(order.total),
+        })
+      })
+
+      const hourlyStats = Array.from(hourlyMap.entries())
+        .map(([hour, stats]) => ({ hour, ...stats }))
+        .sort((a, b) => a.hour - b.hour)
+
+      // Payment method stats
+      const paymentMap = new Map<string, { count: number; amount: number }>()
+      orders.forEach((order) => {
+        const method = order.paymentMethod || "CASH"
+        const existing = paymentMap.get(method) || { count: 0, amount: 0 }
+        paymentMap.set(method, {
+          count: existing.count + 1,
+          amount: existing.amount + Number(order.total),
+        })
+      })
+
+      const paymentMethodLabels: Record<string, string> = {
+        CASH: "Nakit",
+        CREDIT_CARD: "Kredi Kartı",
+        ONLINE: "Online Ödeme",
+      }
+
+      const paymentMethods = Array.from(paymentMap.entries()).map(([method, stats]) => ({
+        method: paymentMethodLabels[method] || method,
+        ...stats,
+        percentage: totalOrders > 0 ? (stats.count / totalOrders) * 100 : 0,
+      }))
+
+      // Order status breakdown
+      const statusMap = new Map<string, number>()
+      orders.forEach((order) => {
+        const count = statusMap.get(order.status) || 0
+        statusMap.set(order.status, count + 1)
+      })
+
+      const statusLabels: Record<string, string> = {
+        PENDING: "Bekliyor",
+        CONFIRMED: "Onaylandı",
+        PREPARING: "Hazırlanıyor",
+        READY: "Hazır",
+        DELIVERED: "Teslim Edildi",
+        CANCELLED: "İptal",
+      }
+
+      const orderStatusStats = Array.from(statusMap.entries()).map(([status, count]) => ({
+        status: statusLabels[status] || status,
+        count,
+        percentage: totalOrders > 0 ? (count / totalOrders) * 100 : 0,
+      }))
+
       return successResponse({
         summary: {
           totalOrders,
@@ -204,8 +264,11 @@ export async function GET(request: NextRequest) {
           returningCustomers: totalCustomers - newCustomers,
         },
         dailyStats,
+        hourlyStats,
         categoryStats,
         popularItems,
+        paymentMethods,
+        orderStatusStats,
         period: { from: dateFrom.toISOString(), to: dateTo.toISOString() },
       })
     } catch {
