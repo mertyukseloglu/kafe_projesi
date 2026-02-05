@@ -21,6 +21,8 @@ import {
   Phone,
   Package,
   Tag,
+  Upload,
+  Code,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
@@ -39,6 +41,8 @@ const navItems = [
   { href: "/panel/tables", icon: Grid3X3, label: "Masalar" },
   { href: "/panel/customers", icon: Users, label: "Müşteriler" },
   { href: "/panel/reports", icon: BarChart3, label: "Raporlar" },
+  { href: "/panel/import", icon: Upload, label: "İçe Aktar" },
+  { href: "/panel/api-docs", icon: Code, label: "API & Webhook" },
   { href: "/panel/settings", icon: Settings, label: "Ayarlar" },
 ]
 
