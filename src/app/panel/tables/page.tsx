@@ -21,6 +21,7 @@ import {
 } from "lucide-react"
 import { useFetch, useMutation, API } from "@/hooks/use-api"
 import { QRCodeSVG } from "qrcode.react"
+import { getTableQrUrl } from "@/lib/subdomain"
 
 // Tip tanımları
 interface Table {
@@ -105,10 +106,10 @@ export default function TablesPage() {
     available: tables.filter(t => t.isActive && !t.hasActiveOrder).length,
   }), [tables])
 
-  // QR URL oluştur
+  // QR URL oluştur - subdomain destekli
   const getQRUrl = (tableNumber: string) => {
-    const baseUrl = typeof window !== "undefined" ? window.location.origin : ""
-    return `${baseUrl}/customer/menu/${restaurantSlug}?table=${tableNumber}`
+    // Production'da subdomain, development'ta path-based URL
+    return getTableQrUrl(restaurantSlug, parseInt(tableNumber, 10))
   }
 
   // Masa toggle

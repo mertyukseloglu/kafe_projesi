@@ -26,6 +26,7 @@ import {
   Lightbulb,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { getTableQrUrl } from "@/lib/subdomain"
 
 interface TenantLayoutProps {
   children: ReactNode
@@ -137,14 +138,15 @@ export default function TenantLayout({ children }: TenantLayoutProps) {
 
         {/* Bottom section */}
         <div className="absolute bottom-0 left-0 right-0 border-t p-3">
-          <Link
-            href={`/customer/menu/${restaurant.slug}?table=1`}
+          <a
+            href={getTableQrUrl(restaurant.slug, 1)}
             target="_blank"
+            rel="noopener noreferrer"
             className="flex items-center gap-2 rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground hover:text-foreground"
           >
             <Grid3X3 className="h-4 w-4" />
             <span>Menüyü Görüntüle</span>
-          </Link>
+          </a>
         </div>
       </aside>
 
