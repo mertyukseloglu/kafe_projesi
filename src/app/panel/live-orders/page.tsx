@@ -1,10 +1,11 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { useSession } from "next-auth/react"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { useRealtimeOrders } from "@/lib/pusher/client"
 import {
-  Clock,
   CheckCircle,
   ChefHat,
   Bell,
@@ -15,6 +16,8 @@ import {
   RefreshCw,
   Timer,
   AlertCircle,
+  Wifi,
+  WifiOff,
 } from "lucide-react"
 
 // Sipariş durumları
@@ -163,10 +166,50 @@ const generateDemoOrders = (): Order[] => [
 ]
 
 export default function LiveOrdersPage() {
+  const { data: session } = useSession()
   const [orders, setOrders] = useState<Order[]>(generateDemoOrders())
   const [soundEnabled, setSoundEnabled] = useState(true)
   const [filter, setFilter] = useState<OrderStatus | "ALL">("ALL")
   const [isRefreshing, setIsRefreshing] = useState(false)
+
+  // Real-time subscription
+  const { isConnected } = useRealtimeOrders(session?.user?.tenantId || null, {
+    onNewOrder: (order) => {
+      console.log("New order received:", order)
+      // Yeni siparişi listeye ekle
+      setOrders((prev) => [
+        {
+          id: order.id,
+          orderNumber: order.orderNumber,
+          tableNumber: order.table || "?",
+          status: "PENDING" as OrderStatus,
+          items: order.items?.map((item, idx) => ({
+            id: `${order.id}-${idx}`,
+            name: item.name,
+            quantity: item.quantity,
+          })) || [],
+          total: order.total || 0,
+          createdAt: order.timestamp,
+        },
+        ...prev,
+      ])
+      // Ses çal
+      if (soundEnabled) {
+        try {
+          const audio = new Audio("/notification.mp3")
+          audio.play().catch(() => {})
+        } catch {}
+      }
+    },
+    onOrderStatusChanged: (order) => {
+      console.log("Order status changed:", order)
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.id === order.id ? { ...o, status: order.status as OrderStatus } : o
+        )
+      )
+    },
+  })
 
   // Zaman hesaplama
   const getElapsedTime = (createdAt: string) => {
@@ -177,15 +220,26 @@ export default function LiveOrdersPage() {
     return `${Math.floor(minutes / 60)} sa ${minutes % 60} dk`
   }
 
-  // Sipariş durumunu güncelle
-  const updateOrderStatus = useCallback((orderId: string, newStatus: OrderStatus) => {
+  // Sipariş durumunu güncelle - API'ye gönder
+  const updateOrderStatus = useCallback(async (orderId: string, newStatus: OrderStatus) => {
+    // Optimistic update
     setOrders(prev => prev.map(order =>
       order.id === orderId ? { ...order, status: newStatus } : order
     ))
 
+    // API'ye gönder
+    try {
+      await fetch("/api/tenant/orders", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId, status: newStatus }),
+      })
+    } catch (err) {
+      console.error("Failed to update order status:", err)
+    }
+
     // Ses çal
     if (soundEnabled && newStatus === "READY") {
-      // Tarayıcı ses API'si
       try {
         const audio = new Audio("/notification.mp3")
         audio.play().catch(() => {})
@@ -200,23 +254,51 @@ export default function LiveOrdersPage() {
     }
   }
 
-  // Yenile
+  // Yenile - API'den çek
   const refreshOrders = async () => {
     setIsRefreshing(true)
-    // Gerçek API'de: await fetch("/api/tenant/orders")
-    await new Promise(resolve => setTimeout(resolve, 500))
-    setOrders(generateDemoOrders())
+    try {
+      const res = await fetch("/api/tenant/orders?status=all&limit=50")
+      const data = await res.json()
+      if (data.success && data.data?.orders) {
+        setOrders(
+          data.data.orders.map((o: Record<string, unknown>) => ({
+            id: o.id,
+            orderNumber: o.orderNumber,
+            tableNumber: (o.table as Record<string, string>)?.number || "?",
+            status: o.status as OrderStatus,
+            items: (o.items as Array<Record<string, unknown>>)?.map((item) => ({
+              id: item.id,
+              name: item.name,
+              quantity: item.quantity,
+              notes: item.notes,
+            })) || [],
+            total: o.total,
+            notes: o.notes,
+            createdAt: o.createdAt,
+          }))
+        )
+      }
+    } catch {
+      // Fallback to demo data
+      setOrders(generateDemoOrders())
+    }
     setIsRefreshing(false)
   }
 
-  // Otomatik yenileme (her 30 saniye)
+  // İlk yüklemede API'den çek
   useEffect(() => {
+    refreshOrders()
+  }, [])
+
+  // Otomatik yenileme (her 30 saniye - Pusher yoksa fallback)
+  useEffect(() => {
+    if (isConnected) return // Pusher varsa polling yapma
     const interval = setInterval(() => {
-      // Gerçek uygulamada API'den çek
-      // refreshOrders()
+      refreshOrders()
     }, 30000)
     return () => clearInterval(interval)
-  }, [])
+  }, [isConnected])
 
   // Filtrelenmiş siparişler
   const filteredOrders = filter === "ALL"
@@ -242,6 +324,11 @@ export default function LiveOrdersPage() {
           <p className="text-slate-600">Mutfak ve servis yönetimi</p>
         </div>
         <div className="flex items-center gap-2">
+          {/* Real-time connection status */}
+          <div className={`flex items-center gap-1 rounded px-2 py-1 text-xs ${isConnected ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}`}>
+            {isConnected ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
+            {isConnected ? "Canlı" : "Polling"}
+          </div>
           <Button
             variant="outline"
             size="sm"

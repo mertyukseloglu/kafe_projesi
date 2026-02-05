@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server"
 import { z } from "zod"
 import { prisma } from "@/lib/prisma"
+import { notifyOrderStatusChanged } from "@/lib/pusher"
 import {
   getAuthenticatedSession,
   errorResponse,
@@ -157,6 +158,16 @@ export async function PATCH(request: NextRequest) {
         },
       },
     })
+
+    // Real-time bildirim gönder (status değiştiyse)
+    if (status && status !== existingOrder.status) {
+      notifyOrderStatusChanged(tenantId, {
+        id: updatedOrder.id,
+        orderNumber: updatedOrder.orderNumber,
+        status: updatedOrder.status,
+        previousStatus: existingOrder.status,
+      }).catch((err) => console.error("Pusher notification error:", err))
+    }
 
     return successResponse({
       id: updatedOrder.id,

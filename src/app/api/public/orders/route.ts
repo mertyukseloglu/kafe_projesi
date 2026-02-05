@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { createOrderSchema } from "@/lib/validations/order"
+import { notifyNewOrder } from "@/lib/pusher"
 import type { ApiResponse, Order } from "@/types"
 
 // Sipariş numarası oluştur
@@ -152,6 +153,18 @@ export async function POST(
         },
       })
     }
+
+    // Real-time bildirim gönder
+    notifyNewOrder(tenant.id, {
+      id: order.id,
+      orderNumber: order.orderNumber,
+      table: tableNumber || null,
+      total: subtotal,
+      items: items.map((item) => ({
+        name: item.name || "Ürün",
+        quantity: item.quantity,
+      })),
+    }).catch((err) => console.error("Pusher notification error:", err))
 
     return NextResponse.json(
       {

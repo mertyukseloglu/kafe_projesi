@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { notifyWaiterCalled } from "@/lib/pusher"
 import type { ApiResponse } from "@/types"
 import { z } from "zod"
 
@@ -78,10 +79,11 @@ export async function POST(
         )
       }
 
-      // Gerçek projede burada:
-      // 1. WebSocket/Pusher ile panel'e bildirim gönderilir
-      // 2. Veritabanına kayıt atılabilir (WaiterCall tablosu)
-      // 3. Push notification gönderilebilir
+      // Real-time bildirim gönder
+      notifyWaiterCalled(tenant.id, {
+        tableNumber,
+        message: message || reasonLabels[reason || "assistance"],
+      }).catch((err) => console.error("Pusher notification error:", err))
 
       console.log(`🔔 Garson çağrısı: ${tenant.name} - Masa ${tableNumber}`, {
         reason,
