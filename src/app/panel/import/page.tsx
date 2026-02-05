@@ -25,9 +25,10 @@ import {
   Beer,
   Cake,
   ExternalLink,
+  Sheet,
 } from "lucide-react"
 
-type ImportTab = "csv" | "photos" | "templates" | "api"
+type ImportTab = "csv" | "photos" | "templates" | "google-sheets"
 
 interface MenuTemplate {
   id: string
@@ -163,6 +164,54 @@ export default function ImportPage() {
       })
     } finally {
       setApplyingTemplate(false)
+    }
+  }
+
+  // Google Sheets State
+  const [sheetsUrl, setSheetsUrl] = useState("")
+  const [sheetsMode, setSheetsMode] = useState<"add" | "replace">("add")
+  const [importingSheets, setImportingSheets] = useState(false)
+  const [sheetsResult, setSheetsResult] = useState<ImportResult | null>(null)
+
+  const handleSheetsImport = async () => {
+    if (!sheetsUrl.trim()) return
+
+    setImportingSheets(true)
+    setSheetsResult(null)
+
+    try {
+      const res = await fetch("/api/tenant/import/google-sheets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: sheetsUrl,
+          mode: sheetsMode,
+        }),
+      })
+
+      const data = await res.json()
+
+      if (data.success) {
+        setSheetsResult({
+          success: true,
+          imported: data.data.imported,
+          categories: data.data.categories,
+          items: data.data.items,
+        })
+        setSheetsUrl("")
+      } else {
+        setSheetsResult({
+          success: false,
+          error: data.error || "İçe aktarma başarısız",
+        })
+      }
+    } catch {
+      setSheetsResult({
+        success: false,
+        error: "Bağlantı hatası oluştu",
+      })
+    } finally {
+      setImportingSheets(false)
     }
   }
 
@@ -320,11 +369,12 @@ export default function ImportPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 border-b">
+      <div className="flex flex-wrap gap-2 border-b">
         {[
           { id: "csv" as const, label: "CSV / Excel", icon: FileSpreadsheet },
           { id: "photos" as const, label: "Fotoğraflar", icon: Image },
           { id: "templates" as const, label: "Şablonlar", icon: LayoutTemplate },
+          { id: "google-sheets" as const, label: "Google Sheets", icon: Sheet },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -895,6 +945,190 @@ export default function ImportPage() {
                 )}
               </div>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Google Sheets Tab */}
+      {activeTab === "google-sheets" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Sheet className="h-5 w-5" />
+              Google Sheets ile İçe Aktarma
+            </CardTitle>
+            <CardDescription>
+              Google Sheets dosyanızın URL&apos;sini paylaşarak menünüzü doğrudan içe aktarın.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Info */}
+            <div className="flex items-start gap-3 rounded-lg bg-blue-50 p-4">
+              <AlertCircle className="h-6 w-6 text-blue-600 shrink-0 mt-0.5" />
+              <div className="text-sm">
+                <p className="font-medium text-blue-900 mb-2">Nasıl Kullanılır?</p>
+                <ol className="list-decimal list-inside space-y-1 text-blue-800">
+                  <li>Google Sheets&apos;inizi açın</li>
+                  <li>&quot;Paylaş&quot; butonuna tıklayın</li>
+                  <li>&quot;Bağlantıya sahip olan herkes görüntüleyebilir&quot; olarak ayarlayın</li>
+                  <li>Bağlantıyı kopyalayıp aşağıya yapıştırın</li>
+                </ol>
+              </div>
+            </div>
+
+            {/* URL Input */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Google Sheets URL&apos;i</label>
+              <input
+                type="url"
+                value={sheetsUrl}
+                onChange={(e) => setSheetsUrl(e.target.value)}
+                placeholder="https://docs.google.com/spreadsheets/d/..."
+                className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:border-primary focus:ring-1 focus:ring-primary outline-none"
+              />
+            </div>
+
+            {/* Import Mode */}
+            <div>
+              <label className="text-sm font-medium mb-2 block">İçe Aktarma Modu</label>
+              <div className="flex gap-4">
+                <button
+                  onClick={() => setSheetsMode("add")}
+                  className={`flex-1 p-4 rounded-lg border-2 transition-all ${
+                    sheetsMode === "add"
+                      ? "border-primary bg-primary/5"
+                      : "border-slate-200 hover:border-slate-300"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <Upload className={`h-5 w-5 ${sheetsMode === "add" ? "text-primary" : "text-slate-400"}`} />
+                    <div className="text-left">
+                      <p className="font-medium">Ekle</p>
+                      <p className="text-sm text-muted-foreground">Mevcut menüye ekle</p>
+                    </div>
+                  </div>
+                </button>
+                <button
+                  onClick={() => setSheetsMode("replace")}
+                  className={`flex-1 p-4 rounded-lg border-2 transition-all ${
+                    sheetsMode === "replace"
+                      ? "border-red-500 bg-red-50"
+                      : "border-slate-200 hover:border-slate-300"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <RefreshCw className={`h-5 w-5 ${sheetsMode === "replace" ? "text-red-500" : "text-slate-400"}`} />
+                    <div className="text-left">
+                      <p className="font-medium">Değiştir</p>
+                      <p className="text-sm text-muted-foreground">Mevcut menüyü sil ve yenile</p>
+                    </div>
+                  </div>
+                </button>
+              </div>
+              {sheetsMode === "replace" && (
+                <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
+                  <AlertCircle className="h-4 w-4" />
+                  Dikkat: Bu işlem mevcut tüm menü ürünlerini silecektir!
+                </p>
+              )}
+            </div>
+
+            {/* Import Button */}
+            <Button
+              onClick={handleSheetsImport}
+              disabled={importingSheets || !sheetsUrl.trim()}
+              className="w-full"
+              size="lg"
+            >
+              {importingSheets ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  İçe Aktarılıyor...
+                </>
+              ) : (
+                <>
+                  <Upload className="mr-2 h-4 w-4" />
+                  Google Sheets&apos;ten İçe Aktar
+                </>
+              )}
+            </Button>
+
+            {/* Import Result */}
+            {sheetsResult && (
+              <div
+                className={`rounded-lg p-4 ${
+                  sheetsResult.success ? "bg-green-50 border border-green-200" : "bg-red-50 border border-red-200"
+                }`}
+              >
+                {sheetsResult.success ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-green-700">
+                      <CheckCircle className="h-5 w-5" />
+                      <span className="font-medium">İçe Aktarma Başarılı!</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div className="bg-white rounded-lg p-3 text-center">
+                        <p className="text-2xl font-bold text-green-600">{sheetsResult.imported}</p>
+                        <p className="text-muted-foreground">Ürün eklendi</p>
+                      </div>
+                      <div className="bg-white rounded-lg p-3 text-center">
+                        <p className="text-2xl font-bold text-green-600">{sheetsResult.categories}</p>
+                        <p className="text-muted-foreground">Kategori</p>
+                      </div>
+                    </div>
+                    <div className="flex justify-center">
+                      <Link href="/panel/menu">
+                        <Button variant="outline">
+                          Menüyü Görüntüle
+                          <ExternalLink className="ml-2 h-4 w-4" />
+                        </Button>
+                      </Link>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-red-700">
+                    <AlertCircle className="h-5 w-5" />
+                    <span>{sheetsResult.error}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* CSV Format Guide */}
+            <div className="rounded-lg bg-slate-50 p-4">
+              <h4 className="font-medium mb-2">Sheets Format Rehberi</h4>
+              <div className="text-sm text-muted-foreground space-y-2">
+                <p><strong>Zorunlu sütunlar:</strong> name (veya ürün/isim), price (veya fiyat), category (veya kategori)</p>
+                <p><strong>Opsiyonel sütunlar:</strong> description (açıklama), tags (etiketler), allergens (alerjenler), prepTime (süre), calories (kalori), isAvailable (aktif)</p>
+                <div className="mt-3 p-3 bg-white rounded border">
+                  <p className="font-medium text-slate-700 mb-2">Örnek tablo:</p>
+                  <table className="text-xs w-full">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="p-1 text-left">name</th>
+                        <th className="p-1 text-left">price</th>
+                        <th className="p-1 text-left">category</th>
+                        <th className="p-1 text-left">description</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td className="p-1">Türk Kahvesi</td>
+                        <td className="p-1">45</td>
+                        <td className="p-1">Sıcak İçecekler</td>
+                        <td className="p-1">Geleneksel</td>
+                      </tr>
+                      <tr>
+                        <td className="p-1">Latte</td>
+                        <td className="p-1">65</td>
+                        <td className="p-1">Sıcak İçecekler</td>
+                        <td className="p-1">Sütlü kahve</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
           </CardContent>
         </Card>
       )}
