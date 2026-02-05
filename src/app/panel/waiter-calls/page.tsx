@@ -140,15 +140,15 @@ export default function WaiterCallsPage() {
         : call
     ))
 
-    // TODO: API call
+    // Sync with API
     try {
       await fetch("/api/tenant/waiter-calls", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ callId, status: "ACKNOWLEDGED" }),
       })
-    } catch (err) {
-      console.error("Failed to acknowledge call:", err)
+    } catch {
+      // Optimistic update already applied
     }
   }, [session])
 
@@ -164,15 +164,15 @@ export default function WaiterCallsPage() {
         : call
     ))
 
-    // TODO: API call
+    // Sync with API
     try {
       await fetch("/api/tenant/waiter-calls", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ callId, status: "RESOLVED" }),
       })
-    } catch (err) {
-      console.error("Failed to resolve call:", err)
+    } catch {
+      // Optimistic update already applied
     }
   }, [])
 
