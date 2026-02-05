@@ -4,14 +4,13 @@ import bcrypt from "bcryptjs"
 import { prisma } from "@/lib/prisma"
 import type { UserRole } from "@prisma/client"
 
-// Demo users for development without database
+// Demo users for development without database (matches seed.ts)
 const DEMO_USERS = [
   {
     id: "demo-super-admin",
-    email: "admin@restoai.com",
+    email: "admin@platform.com",
     password: "admin123",
-    passwordHash: "$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.yELq8rKq/qK6Uy", // admin123
-    name: "Super Admin",
+    name: "Platform Admin",
     role: "SUPER_ADMIN" as UserRole,
     tenantId: null,
     tenantSlug: null,
@@ -19,22 +18,10 @@ const DEMO_USERS = [
   },
   {
     id: "demo-tenant-admin",
-    email: "demo@demo-kafe.com",
+    email: "demo@kafe.com",
     password: "demo123",
-    passwordHash: "$2a$12$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi", // demo123
     name: "Demo Kafe Admin",
     role: "TENANT_ADMIN" as UserRole,
-    tenantId: "demo-tenant-1",
-    tenantSlug: "demo-kafe",
-    isActive: true,
-  },
-  {
-    id: "demo-staff",
-    email: "staff@demo-kafe.com",
-    password: "staff123",
-    passwordHash: "$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.yELq8rKq/qK6Uy", // staff123
-    name: "Demo Personel",
-    role: "STAFF" as UserRole,
     tenantId: "demo-tenant-1",
     tenantSlug: "demo-kafe",
     isActive: true,
@@ -139,11 +126,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           throw new Error("Hesabınız devre dışı")
         }
 
-        // Check password for demo users (simple comparison for known passwords)
-        const isValidDemoPassword =
-          (email === "admin@restoai.com" && password === "admin123") ||
-          (email === "demo@demo-kafe.com" && password === "demo123") ||
-          (email === "staff@demo-kafe.com" && password === "staff123")
+        // Check password for demo users
+        const isValidDemoPassword = demoUser.password === password
 
         if (!isValidDemoPassword) {
           throw new Error("Geçersiz şifre")
