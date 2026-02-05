@@ -18,6 +18,7 @@ import {
   LogOut,
   ChevronDown,
   MonitorPlay,
+  Phone,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
@@ -28,6 +29,7 @@ interface TenantLayoutProps {
 const navItems = [
   { href: "/panel/dashboard", icon: LayoutDashboard, label: "Dashboard" },
   { href: "/panel/live-orders", icon: MonitorPlay, label: "Canlı Takip", badge: true, highlight: true },
+  { href: "/panel/waiter-calls", icon: Phone, label: "Garson Çağrıları", badge: true },
   { href: "/panel/orders", icon: ClipboardList, label: "Siparişler" },
   { href: "/panel/menu", icon: UtensilsCrossed, label: "Menü" },
   { href: "/panel/tables", icon: Grid3X3, label: "Masalar" },
