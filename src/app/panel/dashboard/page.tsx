@@ -4,6 +4,7 @@ import { useState } from "react"
 import Link from "next/link"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Progress } from "@/components/ui/progress"
 import {
   TrendingUp,
   TrendingDown,
@@ -16,6 +17,10 @@ import {
   ArrowRight,
   RefreshCw,
   Loader2,
+  Users,
+  Award,
+  Eye,
+  MousePointer,
 } from "lucide-react"
 import { useFetch, API } from "@/hooks/use-api"
 
@@ -25,6 +30,16 @@ interface DashboardData {
   pending: number
   month: { orders: number; revenue: number }
   customers: number
+  revenueChange: number
+  loyalty: {
+    totalPoints: number
+    tiers: { BRONZE: number; SILVER: number; GOLD: number; PLATINUM: number }
+  }
+  sessions: {
+    today: number
+    avgPageViews: number
+    avgItemViews: number
+  }
   popularItems: { id: string; name: string; price: number; quantity: number }[]
   recentOrders: {
     id: string
@@ -48,6 +63,18 @@ const demoStats = {
   monthlyOrders: 342,
   monthlyLimit: -1,
   revenueChange: 12.5,
+  customers: 45,
+}
+
+const demoLoyalty = {
+  totalPoints: 12500,
+  tiers: { BRONZE: 25, SILVER: 12, GOLD: 6, PLATINUM: 2 },
+}
+
+const demoSessions = {
+  today: 23,
+  avgPageViews: 4.2,
+  avgItemViews: 8.5,
 }
 
 const demoOrders = [
@@ -119,14 +146,21 @@ export default function TenantDashboard() {
     todayOrders: data?.today?.orders || demoStats.todayOrders,
     monthlyOrders: data?.month?.orders || demoStats.monthlyOrders,
     monthlyLimit: -1,
-    revenueChange: 12.5, // TODO: Calculate from API
+    revenueChange: data?.revenueChange ?? demoStats.revenueChange,
+    customers: data?.customers || demoStats.customers,
   }
+
+  const loyalty = data?.loyalty || demoLoyalty
+  const sessions = data?.sessions || demoSessions
 
   const orders = data?.recentOrders?.filter(o =>
     ["PENDING", "CONFIRMED", "PREPARING", "READY"].includes(o.status)
   ) || demoOrders
 
   const popularItems = data?.popularItems || demoPopularItems
+
+  // Tier toplam hesaplama
+  const totalTierCustomers = Object.values(loyalty.tiers).reduce((a, b) => a + b, 0)
 
   return (
     <div className="space-y-6">
@@ -146,7 +180,7 @@ export default function TenantDashboard() {
         </Button>
       </div>
 
-      {/* Stats Cards */}
+      {/* Stats Cards - Satır 1 */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -209,6 +243,94 @@ export default function TenantDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Stats Cards - Satır 2: Müşteri & Analitik */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardDescription>Toplam Müşteri</CardDescription>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold">{stats.customers}</div>
+            <p className="text-xs text-muted-foreground">
+              Kayıtlı müşteri sayısı
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardDescription>Bugünkü Ziyaret</CardDescription>
+            <Eye className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold">{sessions.today}</div>
+            <p className="text-xs text-muted-foreground">
+              Ort. {sessions.avgPageViews} sayfa görüntüleme
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardDescription>Ürün İnceleme</CardDescription>
+            <MousePointer className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold">{sessions.avgItemViews}</div>
+            <p className="text-xs text-muted-foreground">
+              Ort. ürün görüntüleme/ziyaret
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardDescription>Sadakat Puanı</CardDescription>
+            <Award className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold">{loyalty.totalPoints.toLocaleString("tr-TR")}</div>
+            <p className="text-xs text-muted-foreground">
+              Toplam dağıtılan puan
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Loyalty Tier Distribution */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Award className="h-5 w-5" />
+            Müşteri Sadakat Dağılımı
+          </CardTitle>
+          <CardDescription>Tier bazında müşteri sayıları</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 sm:grid-cols-4">
+            {[
+              { tier: "BRONZE", label: "Bronze", color: "bg-amber-600", count: loyalty.tiers.BRONZE },
+              { tier: "SILVER", label: "Silver", color: "bg-gray-400", count: loyalty.tiers.SILVER },
+              { tier: "GOLD", label: "Gold", color: "bg-yellow-500", count: loyalty.tiers.GOLD },
+              { tier: "PLATINUM", label: "Platinum", color: "bg-purple-500", count: loyalty.tiers.PLATINUM },
+            ].map((t) => (
+              <div key={t.tier} className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">{t.label}</span>
+                  <span className="text-sm text-muted-foreground">{t.count}</span>
+                </div>
+                <Progress
+                  value={totalTierCustomers > 0 ? (t.count / totalTierCustomers) * 100 : 0}
+                  className="h-2"
+                  indicatorClassName={t.color}
+                />
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Live Orders */}
       <Card>
