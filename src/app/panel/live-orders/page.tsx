@@ -175,7 +175,6 @@ export default function LiveOrdersPage() {
   // Real-time subscription
   const { isConnected } = useRealtimeOrders(session?.user?.tenantId || null, {
     onNewOrder: (order) => {
-      console.log("New order received:", order)
       // Yeni siparişi listeye ekle
       setOrders((prev) => [
         {
@@ -202,7 +201,6 @@ export default function LiveOrdersPage() {
       }
     },
     onOrderStatusChanged: (order) => {
-      console.log("Order status changed:", order)
       setOrders((prev) =>
         prev.map((o) =>
           o.id === order.id ? { ...o, status: order.status as OrderStatus } : o

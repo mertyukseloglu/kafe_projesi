@@ -50,12 +50,6 @@ function isDemoMode(): boolean {
 
 // Demo payment - simüle edilmiş ödeme
 async function processDemoPayment(request: PaymentRequest): Promise<PaymentResult> {
-  console.log("💳 Demo ödeme işleniyor:", {
-    orderId: request.orderId,
-    amount: request.amount,
-    customer: request.customerName,
-  })
-
   // Simüle edilmiş işlem gecikmesi
   await new Promise((resolve) => setTimeout(resolve, 500))
 
@@ -234,7 +228,6 @@ export async function refundPayment(
   amount: number
 ): Promise<{ success: boolean; refundId?: string; error?: string }> {
   if (isDemoMode() || paymentId.startsWith("demo_")) {
-    console.log("💳 Demo iade işleniyor:", { paymentId, amount })
     return {
       success: true,
       refundId: `refund_${Date.now()}`,

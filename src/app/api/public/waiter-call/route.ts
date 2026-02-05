@@ -85,12 +85,6 @@ export async function POST(
         message: message || reasonLabels[reason || "assistance"],
       }).catch((err) => console.error("Pusher notification error:", err))
 
-      console.log(`🔔 Garson çağrısı: ${tenant.name} - Masa ${tableNumber}`, {
-        reason,
-        message,
-        timestamp: new Date().toISOString(),
-      })
-
       return NextResponse.json({
         success: true,
         data: {
@@ -105,12 +99,6 @@ export async function POST(
       })
     } catch {
       // Database not available - demo mode
-      console.log(`🔔 [DEMO] Garson çağrısı: ${tenantSlug} - Masa ${tableNumber}`, {
-        reason,
-        message,
-        timestamp: new Date().toISOString(),
-      })
-
       return NextResponse.json({
         success: true,
         data: {

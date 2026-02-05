@@ -55,7 +55,7 @@ export function usePusherChannel(channelName: string | null) {
 
     const pusher = getPusherClient()
     if (!pusher) {
-      console.log("Pusher not configured, using polling fallback")
+      // Pusher not configured, using polling fallback
       return
     }
 

@@ -28,11 +28,6 @@ export interface WelcomeEmailData {
 // Email gönderme fonksiyonu (demo mode)
 export async function sendEmail(options: EmailOptions): Promise<{ success: boolean; messageId?: string }> {
   // Production'da gerçek email provider kullanılacak
-  console.log("📧 Email gönderiliyor (demo):", {
-    to: options.to,
-    subject: options.subject,
-  })
-
   // Demo mode - her zaman başarılı
   return {
     success: true,

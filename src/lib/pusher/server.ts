@@ -11,7 +11,6 @@ export function getPusher(): Pusher | null {
     !process.env.PUSHER_SECRET ||
     !process.env.PUSHER_CLUSTER
   ) {
-    console.log("Pusher credentials not configured, real-time disabled")
     return null
   }
 
@@ -52,7 +51,7 @@ export async function triggerEvent(
 ): Promise<boolean> {
   const pusher = getPusher()
   if (!pusher) {
-    console.log(`[Pusher Demo] ${channel} -> ${event}:`, data)
+    // Pusher not configured, skip event
     return false
   }
 

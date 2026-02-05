@@ -118,9 +118,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               tenantSlug: user.tenant?.slug || null,
             }
           }
-        } catch (dbError) {
+        } catch {
           // Database not available, try demo users
-          console.log("Database not available, trying demo users...")
         }
 
         // Fallback to demo users (only if enabled)

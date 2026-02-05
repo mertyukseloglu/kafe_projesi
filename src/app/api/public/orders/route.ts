@@ -211,11 +211,6 @@ export async function POST(
     // Loyalty puanları (sipariş oluşturulduğunda - ödeme sonrası da olabilir)
     if (customerId) {
       addLoyaltyPoints(tenant.id, customerId, order.id, subtotal)
-        .then((result) => {
-          if (result.pointsEarned > 0) {
-            console.log(`Loyalty: ${result.pointsEarned} puan kazanıldı`)
-          }
-        })
         .catch((err) => console.error("Loyalty points error:", err))
     }
 
