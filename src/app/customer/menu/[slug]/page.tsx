@@ -279,6 +279,17 @@ export default function CustomerMenuPage({ params }: CustomerMenuPageProps) {
   const [isChatLoading, setIsChatLoading] = useState(false)
   const chatContainerRef = useRef<HTMLDivElement>(null)
 
+  // Coupon state
+  const [couponCode, setCouponCode] = useState("")
+  const [couponApplied, setCouponApplied] = useState<{
+    code: string
+    discountType: string
+    discountValue: number
+    maxDiscount?: number
+  } | null>(null)
+  const [couponError, setCouponError] = useState("")
+  const [couponLoading, setCouponLoading] = useState(false)
+
   useEffect(() => {
     params.then((p) => setSlug(p.slug))
   }, [params])
@@ -392,10 +403,74 @@ export default function CustomerMenuPage({ params }: CustomerMenuPageProps) {
     }))
   }
 
-  const clearCart = () => setCart([])
+  const clearCart = () => {
+    setCart([])
+    setCouponApplied(null)
+    setCouponCode("")
+    setCouponError("")
+  }
 
-  const cartTotal = cart.reduce((sum, item) => sum + item.totalPrice, 0)
+  const cartSubtotal = cart.reduce((sum, item) => sum + item.totalPrice, 0)
   const cartItemCount = cart.reduce((sum, item) => sum + item.quantity, 0)
+
+  // Calculate discount
+  const calculateDiscount = () => {
+    if (!couponApplied) return 0
+    if (couponApplied.discountType === "percent") {
+      const discount = cartSubtotal * (couponApplied.discountValue / 100)
+      if (couponApplied.maxDiscount && discount > couponApplied.maxDiscount) {
+        return couponApplied.maxDiscount
+      }
+      return discount
+    }
+    return couponApplied.discountValue
+  }
+
+  const discount = calculateDiscount()
+  const cartTotal = Math.max(0, cartSubtotal - discount)
+
+  // Kupon doğrulama
+  const validateCoupon = async () => {
+    if (!couponCode.trim()) return
+    setCouponLoading(true)
+    setCouponError("")
+
+    try {
+      const res = await fetch("/api/public/coupon/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code: couponCode,
+          tenantSlug: slug,
+          orderTotal: cartSubtotal,
+        }),
+      })
+      const data = await res.json()
+
+      if (data.success && data.data.valid) {
+        setCouponApplied({
+          code: couponCode.toUpperCase(),
+          discountType: data.data.discountType,
+          discountValue: data.data.discountValue,
+          maxDiscount: data.data.maxDiscount,
+        })
+        setCouponError("")
+      } else {
+        setCouponError(data.data?.message || "Geçersiz kupon kodu")
+        setCouponApplied(null)
+      }
+    } catch {
+      setCouponError("Kupon doğrulanamadı")
+    } finally {
+      setCouponLoading(false)
+    }
+  }
+
+  const removeCoupon = () => {
+    setCouponApplied(null)
+    setCouponCode("")
+    setCouponError("")
+  }
 
   // Sipariş gönderme
   const submitOrder = async () => {
@@ -701,7 +776,7 @@ export default function CustomerMenuPage({ params }: CustomerMenuPageProps) {
             Sepeti Görüntüle ({cartItemCount} ürün)
             <ChevronRight className="ml-auto h-5 w-5" />
             <span className="ml-2 rounded-lg bg-primary-foreground/20 px-3 py-1">
-              ₺{cartTotal}
+              ₺{cartTotal.toFixed(2)}
             </span>
           </Button>
         </div>
@@ -806,10 +881,66 @@ export default function CustomerMenuPage({ params }: CustomerMenuPageProps) {
                   </div>
                 )}
 
+                {/* Kupon */}
+                <div className="mb-4">
+                  {couponApplied ? (
+                    <div className="flex items-center justify-between rounded-xl bg-green-50 p-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-green-600">🎟️</span>
+                        <span className="font-medium text-green-700">{couponApplied.code}</span>
+                        <span className="text-sm text-green-600">
+                          ({couponApplied.discountType === "percent" ? `%${couponApplied.discountValue}` : `₺${couponApplied.discountValue}`})
+                        </span>
+                      </div>
+                      <button
+                        onClick={removeCoupon}
+                        className="rounded-lg p-1 text-green-600 hover:bg-green-100"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={couponCode}
+                        onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                        placeholder="Kupon kodu"
+                        className="flex-1 rounded-xl border border-slate-200 px-4 py-2 text-sm uppercase focus:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-100"
+                      />
+                      <Button
+                        variant="outline"
+                        onClick={validateCoupon}
+                        disabled={couponLoading || !couponCode.trim()}
+                        className="rounded-xl"
+                      >
+                        {couponLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Uygula"}
+                      </Button>
+                    </div>
+                  )}
+                  {couponError && (
+                    <p className="mt-2 text-sm text-red-500">{couponError}</p>
+                  )}
+                </div>
+
+                {/* Ara Toplam ve İndirim */}
+                {discount > 0 && (
+                  <div className="mb-2 space-y-1">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Ara Toplam</span>
+                      <span>₺{cartSubtotal.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm text-green-600">
+                      <span>İndirim</span>
+                      <span>-₺{discount.toFixed(2)}</span>
+                    </div>
+                  </div>
+                )}
+
                 {/* Toplam */}
                 <div className="mb-4 flex justify-between text-lg">
                   <span className="text-muted-foreground">Toplam</span>
-                  <span className="text-2xl font-bold">₺{cartTotal}</span>
+                  <span className="text-2xl font-bold">₺{cartTotal.toFixed(2)}</span>
                 </div>
 
                 {/* Sipariş Butonu */}

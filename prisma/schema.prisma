@@ -87,6 +87,10 @@ model Tenant {
   dailyStats      DailyStats[]
   waiterCalls     WaiterCall[]
 
+  // Campaigns & Coupons
+  campaigns       Campaign[]
+  coupons         Coupon[]
+
   @@index([slug])
   @@index([isActive])
 }
@@ -222,6 +226,9 @@ model Category {
   image       String?
   icon        String?    // Lucide icon adı
 
+  // Çoklu dil desteği
+  translations Json      @default("{}") // { "en": { "name": "...", "description": "..." } }
+
   sortOrder   Int        @default(0)
   isActive    Boolean    @default(true)
 
@@ -252,6 +259,15 @@ model MenuItem {
   price       Decimal  @db.Decimal(10, 2)
   image       String?
 
+  // Çoklu dil desteği
+  translations Json    @default("{}") // { "en": { "name": "...", "description": "..." } }
+
+  // Stok takibi
+  trackStock      Boolean @default(false)
+  stockQuantity   Int     @default(0)
+  lowStockAlert   Int     @default(5)  // Bu seviyenin altında uyarı
+  stockUnit       String  @default("adet") // adet, porsiyon, kg, litre
+
   // Ek bilgiler
   calories    Int?
   prepTime    Int?     // Hazırlık süresi (dakika)
@@ -271,6 +287,9 @@ model MenuItem {
   extras      Json     @default("[]")
   // [{ name: "Ekstra peynir", price: 5 }, { name: "Sos", price: 3 }]
 
+  // Maliyet ve kar marjı
+  costPrice   Decimal? @db.Decimal(10, 2)
+
   sortOrder   Int      @default(0)
   isAvailable Boolean  @default(true)
   isFeatured  Boolean  @default(false)
@@ -283,6 +302,7 @@ model MenuItem {
   @@index([tenantId])
   @@index([categoryId])
   @@index([isAvailable])
+  @@index([trackStock])
 }
 
 // ==================== TABLE (MASA) ====================
@@ -735,6 +755,203 @@ model WaiterCall {
   @@index([tenantId])
   @@index([status])
   @@index([createdAt])
+}
+
+// ==================== CAMPAIGN & COUPON (KAMPANYA & KUPON) ====================
+
+enum CampaignType {
+  DISCOUNT_PERCENT   // Yüzde indirim
+  DISCOUNT_AMOUNT    // Tutar indirim
+  BUY_X_GET_Y        // X al Y öde
+  FREE_ITEM          // Ücretsiz ürün
+  FREE_DELIVERY      // Ücretsiz teslimat
+  BUNDLE             // Paket fiyat
+}
+
+enum CampaignStatus {
+  DRAFT
+  SCHEDULED
+  ACTIVE
+  PAUSED
+  ENDED
+}
+
+model Campaign {
+  id          String   @id @default(cuid())
+
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  name        String
+  description String?
+  type        CampaignType
+
+  // İndirim değeri
+  discountValue   Decimal @db.Decimal(10, 2)  // % veya TL
+  minOrderAmount  Decimal? @db.Decimal(10, 2) // Min sepet tutarı
+  maxDiscount     Decimal? @db.Decimal(10, 2) // Maks indirim (% için)
+
+  // X al Y öde için
+  buyQuantity     Int?
+  getQuantity     Int?
+
+  // Uygulama kapsamı
+  applicableItems Json   @default("[]")  // menuItemId listesi (boş = hepsi)
+  applicableCategories Json @default("[]") // categoryId listesi
+
+  // Geçerlilik
+  status      CampaignStatus @default(DRAFT)
+  startDate   DateTime
+  endDate     DateTime?
+
+  // Kullanım limiti
+  usageLimit  Int     @default(0)  // 0 = sınırsız
+  usedCount   Int     @default(0)
+  perCustomerLimit Int @default(0) // 0 = sınırsız
+
+  // Hedef kitle
+  targetTiers     Json   @default("[]")  // LoyaltyTier listesi
+  targetCustomers Json   @default("[]")  // customerId listesi (boş = hepsi)
+  isFirstOrderOnly Boolean @default(false)
+
+  // Zaman kısıtlamaları
+  validDays       Json   @default("[]")  // [0,1,2,3,4,5,6] = haftanın günleri
+  validHoursFrom  String?  // "11:00"
+  validHoursTo    String?  // "15:00"
+
+  // Görünürlük
+  isPublic    Boolean @default(true)  // Menüde göster
+  bannerImage String?
+
+  // Çoklu dil
+  translations Json @default("{}") // { "en": { "name": "...", "description": "..." } }
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  coupons     Coupon[]
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([startDate, endDate])
+}
+
+model Coupon {
+  id          String   @id @default(cuid())
+
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Kampanya ile ilişki (opsiyonel - direkt kupon da olabilir)
+  campaignId  String?
+  campaign    Campaign? @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  code        String   // Kupon kodu: "YENI2024", "HOSGELDIN"
+
+  // Kampanya bağlantısı yoksa direkt indirim
+  discountType    String?   // "percent", "amount"
+  discountValue   Decimal?  @db.Decimal(10, 2)
+  minOrderAmount  Decimal?  @db.Decimal(10, 2)
+  maxDiscount     Decimal?  @db.Decimal(10, 2)
+
+  // Geçerlilik
+  isActive    Boolean  @default(true)
+  startDate   DateTime @default(now())
+  endDate     DateTime?
+
+  // Kullanım limiti
+  usageLimit      Int @default(0)  // 0 = sınırsız
+  usedCount       Int @default(0)
+  perCustomerLimit Int @default(1)
+
+  // Kullanım kaydı
+  usages      CouponUsage[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@index([code])
+  @@index([isActive])
+}
+
+model CouponUsage {
+  id          String   @id @default(cuid())
+
+  couponId    String
+  coupon      Coupon   @relation(fields: [couponId], references: [id], onDelete: Cascade)
+
+  customerId  String?
+  orderId     String?
+
+  discountApplied Decimal @db.Decimal(10, 2)
+
+  usedAt      DateTime @default(now())
+
+  @@index([couponId])
+  @@index([customerId])
+}
+
+// ==================== STOCK LOG (STOK HAREKETLERİ) ====================
+
+enum StockMovementType {
+  IN          // Stok girişi
+  OUT         // Stok çıkışı (sipariş)
+  ADJUSTMENT  // Manuel düzeltme
+  WASTE       // Fire/kayıp
+  TRANSFER    // Transfer
+}
+
+model StockMovement {
+  id          String   @id @default(cuid())
+
+  tenantId    String
+
+  menuItemId  String
+
+  type        StockMovementType
+  quantity    Int       // + veya -
+
+  // Önceki ve sonraki stok
+  previousStock Int
+  newStock      Int
+
+  // Açıklama
+  reason      String?
+  orderId     String?   // Sipariş kaynaklı ise
+  userId      String?   // İşlemi yapan kullanıcı
+
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([menuItemId])
+  @@index([createdAt])
+}
+
+// ==================== TRANSLATIONS (ÇEVİRİLER) ====================
+
+model Translation {
+  id          String   @id @default(cuid())
+
+  tenantId    String?  // null = platform geneli
+
+  // Hangi model ve alan
+  entityType  String   // "menu_item", "category", "campaign"
+  entityId    String   // İlgili kaydın ID'si
+  field       String   // "name", "description"
+
+  // Çeviriler
+  locale      String   // "en", "tr", "de", "ar"
+  value       String   @db.Text
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([entityType, entityId, field, locale])
+  @@index([tenantId])
+  @@index([entityType, entityId])
+  @@index([locale])
 }
 
 // ==================== PLATFORM SETTINGS ====================
