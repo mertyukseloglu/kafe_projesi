@@ -349,7 +349,7 @@ export default function CustomerMenuPage({ params }: CustomerMenuPageProps) {
   const [selectedCategory, setSelectedCategory] = useState("all")
   const [cart, setCart] = useState<CartItem[]>([])
   const [isCartOpen, setIsCartOpen] = useState(false)
-  const [isChatOpen, setIsChatOpen] = useState(false)
+  const [isAssistantOpen, setIsAssistantOpen] = useState(false)
   const [orderSent, setOrderSent] = useState(false)
 
   // Product detail modal state
@@ -759,8 +759,8 @@ export default function CustomerMenuPage({ params }: CustomerMenuPageProps) {
 
       const data = await response.json()
 
-      if (data.success && data.data?.reply) {
-        const assistantMessage: ChatMessage = { role: "assistant", content: data.data.reply }
+      if (data.success && data.data?.message) {
+        const assistantMessage: ChatMessage = { role: "assistant", content: data.data.message }
         setChatMessages(prev => [...prev, assistantMessage])
       } else {
         // Fallback response
@@ -854,6 +854,24 @@ export default function CustomerMenuPage({ params }: CustomerMenuPageProps) {
               )}
             </Button>
           </div>
+        </div>
+
+        {/* Aksiyon Butonları - Garson ve Asistan */}
+        <div className="flex gap-2 px-4 pb-3">
+          <button
+            onClick={callWaiter}
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 px-4 py-3 text-sm font-medium text-white shadow-lg shadow-orange-500/25 transition-all hover:shadow-xl active:scale-[0.98]"
+          >
+            <Phone className="h-4 w-4" />
+            <span>Garson Çağır</span>
+          </button>
+          <button
+            onClick={() => setIsAssistantOpen(true)}
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-500 to-purple-600 px-4 py-3 text-sm font-medium text-white shadow-lg shadow-purple-500/25 transition-all hover:shadow-xl active:scale-[0.98]"
+          >
+            <Sparkles className="h-4 w-4" />
+            <span>Asistanla Sipariş</span>
+          </button>
         </div>
 
         {/* Kategoriler */}
@@ -1258,107 +1276,159 @@ export default function CustomerMenuPage({ params }: CustomerMenuPageProps) {
         </div>
       )}
 
-      {/* Garson Çağır / AI Chat Butonları */}
-      <div className={`fixed right-4 flex flex-col gap-3 transition-all ${cartItemCount > 0 ? "bottom-28" : "bottom-6"}`}>
-        <button
-          className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-500 to-orange-600 text-white shadow-lg shadow-orange-500/30 transition-all hover:scale-110 hover:shadow-xl active:scale-95"
-          onClick={callWaiter}
-          title="Garson Çağır"
+
+      {/* AI Sipariş Asistanı Drawer */}
+      {isAssistantOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm animate-in fade-in"
+          onClick={() => setIsAssistantOpen(false)}
         >
-          <Phone className="h-6 w-6" />
-        </button>
-        <button
-          className={`flex h-14 w-14 items-center justify-center rounded-2xl shadow-lg transition-all hover:scale-110 hover:shadow-xl active:scale-95 ${
-            isChatOpen
-              ? "bg-muted text-muted-foreground shadow-none"
-              : "bg-gradient-to-br from-primary to-primary/80 text-primary-foreground shadow-primary/30"
-          }`}
-          onClick={() => setIsChatOpen(!isChatOpen)}
-          title="Sipariş Asistanı"
-        >
-          {isChatOpen ? <X className="h-6 w-6" /> : <MessageCircle className="h-6 w-6" />}
-        </button>
-      </div>
-
-      {/* AI Chat Panel */}
-      {isChatOpen && (
-        <div className={`fixed right-4 w-[calc(100%-2rem)] max-w-sm rounded-2xl border bg-background shadow-2xl transition-all animate-in slide-in-from-bottom-4 fade-in ${cartItemCount > 0 ? "bottom-48" : "bottom-24"}`}>
-          <div className="flex items-center gap-3 border-b px-4 py-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/80">
-              <Sparkles className="h-5 w-5 text-primary-foreground" />
-            </div>
-            <div className="flex-1">
-              <h3 className="font-semibold">Sipariş Asistanı</h3>
-              <p className="text-xs text-muted-foreground">Size yardımcı olmak için buradayım</p>
-            </div>
-          </div>
-          <div ref={chatContainerRef} className="h-72 overflow-y-auto p-4 space-y-3">
-            {/* Welcome Message */}
-            <div className="rounded-2xl rounded-tl-sm bg-muted p-4 text-sm">
-              <p className="font-medium">Merhaba! 👋</p>
-              <p className="mt-1 text-muted-foreground">
-                Ben {restaurantName} sipariş asistanıyım. Size nasıl yardımcı olabilirim?
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {["Öneri ister misin?", "En popüler ne?", "Vegan seçenekler"].map((suggestion) => (
-                  <button
-                    key={suggestion}
-                    onClick={() => setChatInput(suggestion)}
-                    className="rounded-full bg-background px-3 py-1.5 text-xs font-medium shadow-sm transition-colors hover:bg-primary hover:text-primary-foreground"
-                  >
-                    {suggestion}
-                  </button>
-                ))}
-              </div>
+          <div
+            className="absolute bottom-0 left-0 right-0 max-h-[85vh] overflow-hidden rounded-t-3xl bg-background shadow-2xl animate-in slide-in-from-bottom"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Handle */}
+            <div className="flex justify-center pt-3 pb-1">
+              <div className="h-1.5 w-12 rounded-full bg-muted-foreground/30" />
             </div>
 
-            {/* Chat Messages */}
-            {chatMessages.map((msg, index) => (
-              <div
-                key={index}
-                className={`rounded-2xl p-4 text-sm ${
-                  msg.role === "user"
-                    ? "ml-8 rounded-tr-sm bg-primary text-primary-foreground"
-                    : "mr-8 rounded-tl-sm bg-muted"
-                }`}
-              >
-                {msg.content}
+            {/* Header */}
+            <div className="sticky top-0 flex items-center justify-between border-b bg-background px-6 py-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600">
+                  <Sparkles className="h-6 w-6 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold">Sipariş Asistanı</h2>
+                  <p className="text-sm text-muted-foreground">Size menü önerileri sunuyorum</p>
+                </div>
               </div>
-            ))}
-
-            {/* Loading indicator */}
-            {isChatLoading && (
-              <div className="mr-8 flex items-center gap-2 rounded-2xl rounded-tl-sm bg-muted p-4 text-sm">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span className="text-muted-foreground">Yazıyor...</span>
-              </div>
-            )}
-          </div>
-          <div className="border-t p-3">
-            <form
-              onSubmit={(e) => {
-                e.preventDefault()
-                sendChatMessage()
-              }}
-              className="flex gap-2"
-            >
-              <input
-                type="text"
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                placeholder="Mesajınızı yazın..."
-                className="flex-1 rounded-xl border-2 bg-background px-4 py-2.5 text-sm transition-colors focus:border-primary focus:outline-none"
-                disabled={isChatLoading}
-              />
               <Button
+                variant="ghost"
                 size="icon"
-                className="h-10 w-10 rounded-xl"
-                type="submit"
-                disabled={isChatLoading || !chatInput.trim()}
+                onClick={() => setIsAssistantOpen(false)}
+                className="rounded-full"
               >
-                {isChatLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                <X className="h-5 w-5" />
               </Button>
-            </form>
+            </div>
+
+            {/* Content */}
+            <div className="overflow-y-auto p-6 space-y-6" style={{ maxHeight: "calc(85vh - 120px)" }}>
+              {/* Hızlı Öneriler */}
+              <div>
+                <h3 className="text-sm font-semibold text-muted-foreground mb-3">Size Ne Önereyim?</h3>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { label: "☕ Kahve öner", query: "Bana kahve öner" },
+                    { label: "🍰 Tatlı öner", query: "Tatlı ne yemeliyim?" },
+                    { label: "🥤 Serinletici", query: "Soğuk içecek öner" },
+                    { label: "🌿 Sağlıklı", query: "Sağlıklı seçenekler" },
+                    { label: "⭐ Popüler", query: "En popüler ürünler" },
+                    { label: "💰 Ekonomik", query: "Uygun fiyatlı öneriler" },
+                  ].map((item) => (
+                    <button
+                      key={item.label}
+                      onClick={() => {
+                        setChatInput(item.query)
+                        sendChatMessage()
+                      }}
+                      className="rounded-xl border-2 border-dashed border-muted-foreground/20 p-3 text-sm font-medium transition-all hover:border-primary hover:bg-primary/5"
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Chat Mesajları */}
+              <div ref={chatContainerRef} className="space-y-3">
+                {chatMessages.length === 0 ? (
+                  <div className="rounded-2xl bg-muted/50 p-4 text-center">
+                    <p className="text-sm text-muted-foreground">
+                      Yukarıdaki seçeneklerden birini seçin veya aşağıya yazın
+                    </p>
+                  </div>
+                ) : (
+                  chatMessages.map((msg, index) => (
+                    <div
+                      key={index}
+                      className={`rounded-2xl p-4 text-sm ${
+                        msg.role === "user"
+                          ? "ml-8 bg-primary text-primary-foreground"
+                          : "mr-8 bg-muted"
+                      }`}
+                    >
+                      {msg.content}
+                    </div>
+                  ))
+                )}
+
+                {isChatLoading && (
+                  <div className="mr-8 flex items-center gap-2 rounded-2xl bg-muted p-4 text-sm">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span className="text-muted-foreground">Düşünüyorum...</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Menü Önerileri - Popüler Ürünler */}
+              <div>
+                <h3 className="text-sm font-semibold text-muted-foreground mb-3">🔥 Popüler Ürünler</h3>
+                <div className="space-y-2">
+                  {demoMenuItems.slice(0, 4).map((item) => (
+                    <button
+                      key={item.id}
+                      onClick={() => {
+                        addSimpleToCart(item)
+                        setIsAssistantOpen(false)
+                      }}
+                      className="flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-all hover:border-primary hover:bg-primary/5"
+                    >
+                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-muted text-2xl">
+                        {item.category === "sicak-icecekler" ? "☕" : item.category === "tatlilar" ? "🍰" : "🥤"}
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-medium">{item.name}</p>
+                        <p className="text-xs text-muted-foreground line-clamp-1">{item.description}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold text-primary">₺{item.price}</p>
+                        <Plus className="h-4 w-4 text-muted-foreground" />
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Input */}
+            <div className="border-t p-4">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  sendChatMessage()
+                }}
+                className="flex gap-2"
+              >
+                <input
+                  type="text"
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  placeholder="Ne yemek/içmek istersiniz?"
+                  className="flex-1 rounded-xl border-2 bg-background px-4 py-3 text-sm transition-colors focus:border-primary focus:outline-none"
+                  disabled={isChatLoading}
+                />
+                <Button
+                  size="icon"
+                  className="h-12 w-12 rounded-xl"
+                  type="submit"
+                  disabled={isChatLoading || !chatInput.trim()}
+                >
+                  {isChatLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
+                </Button>
+              </form>
+            </div>
           </div>
         </div>
       )}
