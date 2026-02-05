@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { useSearchParams } from "next/navigation"
+import { useSearchParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { ShoppingCart, Plus, Minus, X, MessageCircle, Phone, Send, Loader2 } from "lucide-react"
@@ -138,6 +138,7 @@ interface CustomerMenuPageProps {
 
 export default function CustomerMenuPage({ params }: CustomerMenuPageProps) {
   const searchParams = useSearchParams()
+  const router = useRouter()
   const tableNumber = searchParams.get("table")
 
   const [slug, setSlug] = useState<string>("")
@@ -214,24 +215,25 @@ export default function CustomerMenuPage({ params }: CustomerMenuPageProps) {
 
       const data = await response.json()
 
-      if (data.success) {
+      if (data.success && data.data?.id) {
         setOrderSent(true)
+        clearCart()
+        // Sipariş takip sayfasına yönlendir
         setTimeout(() => {
-          clearCart()
-          setIsCartOpen(false)
-          setOrderSent(false)
-        }, 2000)
+          router.push(`/customer/order/${data.data.id}`)
+        }, 1500)
       } else {
         alert(data.error || "Sipariş gönderilemedi")
       }
     } catch {
       // API bağlantı hatası - demo mode
+      // Demo için random order ID oluştur
+      const demoOrderId = `demo_${Date.now()}`
       setOrderSent(true)
+      clearCart()
       setTimeout(() => {
-        clearCart()
-        setIsCartOpen(false)
-        setOrderSent(false)
-      }, 2000)
+        router.push(`/customer/order/${demoOrderId}`)
+      }, 1500)
     }
   }
 

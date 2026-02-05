@@ -1,117 +1,175 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   TrendingUp,
-  TrendingDown,
   ShoppingBag,
   DollarSign,
   Users,
-  Clock,
   Download,
-  Calendar,
   ArrowUpRight,
   ArrowDownRight,
   Coffee,
   Cake,
   GlassWater,
   Sandwich,
+  Loader2,
 } from "lucide-react"
+import { useFetch } from "@/hooks/use-api"
 
-// Demo veri
+// Period options
 const periodOptions = [
-  { value: "today", label: "Bugün" },
-  { value: "yesterday", label: "Dün" },
+  { value: "day", label: "Bugün" },
   { value: "week", label: "Bu Hafta" },
   { value: "month", label: "Bu Ay" },
-  { value: "quarter", label: "Son 3 Ay" },
-  { value: "year", label: "Bu Yıl" },
 ]
 
-const summaryStats = {
-  today: {
-    revenue: 2450,
-    revenueChange: 12,
-    orders: 32,
-    ordersChange: 8,
-    avgTicket: 76.5,
-    avgTicketChange: 3.5,
-    customers: 28,
-    customersChange: 15,
-  },
-  week: {
-    revenue: 15680,
-    revenueChange: 18,
-    orders: 198,
-    ordersChange: 12,
-    avgTicket: 79.2,
-    avgTicketChange: 5,
-    customers: 156,
-    customersChange: 22,
-  },
+// Icon mapping for products
+const getProductIcon = (name: string) => {
+  const lowerName = name.toLowerCase()
+  if (lowerName.includes("latte") || lowerName.includes("kahve") || lowerName.includes("cappuccino")) return Coffee
+  if (lowerName.includes("cake") || lowerName.includes("tiramisu") || lowerName.includes("brownie")) return Cake
+  if (lowerName.includes("limonata") || lowerName.includes("ice") || lowerName.includes("soğuk")) return GlassWater
+  return Sandwich
 }
 
-const dailySales = [
-  { day: "Pzt", revenue: 1850, orders: 24 },
-  { day: "Sal", revenue: 2100, orders: 28 },
-  { day: "Çar", revenue: 1950, orders: 26 },
-  { day: "Per", revenue: 2300, orders: 30 },
-  { day: "Cum", revenue: 2850, orders: 38 },
-  { day: "Cmt", revenue: 3200, orders: 42 },
-  { day: "Paz", revenue: 2450, orders: 32 },
-]
+// Category colors
+const categoryColors: Record<string, string> = {
+  "Sıcak İçecekler": "bg-orange-500",
+  "Soğuk İçecekler": "bg-blue-500",
+  "Tatlılar": "bg-pink-500",
+  "Atıştırmalıklar": "bg-green-500",
+}
 
-const topProducts = [
-  { name: "Latte", quantity: 145, revenue: 9425, icon: Coffee },
-  { name: "Cheesecake", quantity: 98, revenue: 8330, icon: Cake },
-  { name: "Türk Kahvesi", quantity: 89, revenue: 4005, icon: Coffee },
-  { name: "Cappuccino", quantity: 76, revenue: 4560, icon: Coffee },
-  { name: "Sandviç", quantity: 62, revenue: 5890, icon: Sandwich },
-  { name: "Ice Latte", quantity: 58, revenue: 4060, icon: GlassWater },
-  { name: "Tiramisu", quantity: 45, revenue: 4050, icon: Cake },
-  { name: "Limonata", quantity: 42, revenue: 1890, icon: GlassWater },
-]
+interface ReportData {
+  summary: {
+    totalOrders: number
+    totalRevenue: number
+    averageOrderValue: number
+    totalCustomers: number
+    newCustomers: number
+    returningCustomers: number
+  }
+  dailyStats: Array<{ date: string; orders: number; revenue: number }>
+  hourlyStats?: Array<{ hour: number; orders: number; revenue: number }>
+  categoryStats: Array<{ name: string; orders: number; revenue: number; percentage: number }>
+  popularItems: Array<{ name: string; quantity: number; revenue: number }>
+  period: { from: string; to: string }
+}
 
-const categoryBreakdown = [
-  { name: "Sıcak İçecekler", percentage: 45, revenue: 7056, color: "bg-orange-500" },
-  { name: "Tatlılar", percentage: 28, revenue: 4390, color: "bg-pink-500" },
-  { name: "Soğuk İçecekler", percentage: 17, revenue: 2666, color: "bg-blue-500" },
-  { name: "Atıştırmalıklar", percentage: 10, revenue: 1568, color: "bg-green-500" },
-]
-
-const hourlyData = [
-  { hour: "09:00", orders: 8 },
-  { hour: "10:00", orders: 15 },
-  { hour: "11:00", orders: 22 },
-  { hour: "12:00", orders: 35 },
-  { hour: "13:00", orders: 42 },
-  { hour: "14:00", orders: 28 },
-  { hour: "15:00", orders: 32 },
-  { hour: "16:00", orders: 38 },
-  { hour: "17:00", orders: 45 },
-  { hour: "18:00", orders: 52 },
-  { hour: "19:00", orders: 48 },
-  { hour: "20:00", orders: 35 },
-  { hour: "21:00", orders: 22 },
-  { hour: "22:00", orders: 12 },
-]
-
-const recentOrders = [
-  { id: "S048", time: "14:32", items: 4, total: 185, status: "Teslim Edildi" },
-  { id: "S047", time: "14:15", items: 2, total: 95, status: "Teslim Edildi" },
-  { id: "S046", time: "13:58", items: 3, total: 145, status: "Teslim Edildi" },
-  { id: "S045", time: "13:42", items: 1, total: 65, status: "Teslim Edildi" },
-  { id: "S044", time: "13:25", items: 5, total: 220, status: "Teslim Edildi" },
-]
+// Fallback demo data
+const fallbackData: ReportData = {
+  summary: {
+    totalOrders: 156,
+    totalRevenue: 18450,
+    averageOrderValue: 118.27,
+    totalCustomers: 89,
+    newCustomers: 23,
+    returningCustomers: 66,
+  },
+  dailyStats: [
+    { date: "2024-02-01", orders: 22, revenue: 2640 },
+    { date: "2024-02-02", orders: 28, revenue: 3360 },
+    { date: "2024-02-03", orders: 25, revenue: 2950 },
+    { date: "2024-02-04", orders: 32, revenue: 3840 },
+    { date: "2024-02-05", orders: 18, revenue: 2160 },
+    { date: "2024-02-06", orders: 20, revenue: 2400 },
+    { date: "2024-02-07", orders: 11, revenue: 1100 },
+  ],
+  categoryStats: [
+    { name: "Sıcak İçecekler", orders: 68, revenue: 5440, percentage: 29.5 },
+    { name: "Soğuk İçecekler", orders: 42, revenue: 3360, percentage: 18.2 },
+    { name: "Tatlılar", orders: 31, revenue: 2790, percentage: 15.1 },
+    { name: "Atıştırmalıklar", orders: 15, revenue: 1425, percentage: 7.7 },
+  ],
+  popularItems: [
+    { name: "Latte", quantity: 45, revenue: 2925 },
+    { name: "Cappuccino", quantity: 38, revenue: 2280 },
+    { name: "Cheesecake", quantity: 27, revenue: 2295 },
+    { name: "Türk Kahvesi", quantity: 24, revenue: 1080 },
+    { name: "Ice Latte", quantity: 21, revenue: 1470 },
+  ],
+  period: { from: new Date().toISOString(), to: new Date().toISOString() },
+}
 
 export default function ReportsPage() {
   const [selectedPeriod, setSelectedPeriod] = useState("week")
+  const { data: reportData, isLoading, refetch } = useFetch<ReportData>(
+    `/api/tenant/reports?period=${selectedPeriod}`
+  )
 
-  const stats = selectedPeriod === "today" ? summaryStats.today : summaryStats.week
-  const maxDailyRevenue = Math.max(...dailySales.map((d) => d.revenue))
-  const maxHourlyOrders = Math.max(...hourlyData.map((h) => h.orders))
+  // Use API data or fallback
+  const data = reportData || fallbackData
+
+  // Refetch when period changes
+  useEffect(() => {
+    refetch()
+  }, [selectedPeriod, refetch])
+
+  const stats = {
+    revenue: data.summary.totalRevenue,
+    revenueChange: 12,
+    orders: data.summary.totalOrders,
+    ordersChange: 8,
+    avgTicket: data.summary.averageOrderValue,
+    avgTicketChange: 3.5,
+    customers: data.summary.totalCustomers,
+    customersChange: 15,
+  }
+  // Transform daily stats for chart
+  const dailySales = data.dailyStats.map((d) => {
+    const date = new Date(d.date)
+    const dayNames = ["Paz", "Pzt", "Sal", "Çar", "Per", "Cum", "Cmt"]
+    return {
+      day: dayNames[date.getDay()],
+      revenue: d.revenue,
+      orders: d.orders,
+    }
+  })
+
+  // Hourly data (demo)
+  const hourlyData = data.hourlyStats || [
+    { hour: 9, orders: 8 },
+    { hour: 10, orders: 15 },
+    { hour: 11, orders: 22 },
+    { hour: 12, orders: 35 },
+    { hour: 13, orders: 42 },
+    { hour: 14, orders: 28 },
+    { hour: 15, orders: 32 },
+    { hour: 16, orders: 38 },
+    { hour: 17, orders: 45 },
+    { hour: 18, orders: 52 },
+    { hour: 19, orders: 48 },
+    { hour: 20, orders: 35 },
+    { hour: 21, orders: 22 },
+    { hour: 22, orders: 12 },
+  ]
+
+  // Category breakdown with colors
+  const categoryBreakdown = data.categoryStats.map((cat) => ({
+    ...cat,
+    color: categoryColors[cat.name] || "bg-gray-500",
+  }))
+
+  // Top products with icons
+  const topProducts = data.popularItems.map((item) => ({
+    ...item,
+    icon: getProductIcon(item.name),
+  }))
+
+  const maxDailyRevenue = Math.max(...dailySales.map((d) => d.revenue), 1)
+  const maxHourlyOrders = Math.max(...hourlyData.map((h) => h.orders), 1)
+
+  // Recent orders (demo)
+  const recentOrders = [
+    { id: "S048", time: "14:32", items: 4, total: 185, status: "Teslim Edildi" },
+    { id: "S047", time: "14:15", items: 2, total: 95, status: "Teslim Edildi" },
+    { id: "S046", time: "13:58", items: 3, total: 145, status: "Teslim Edildi" },
+    { id: "S045", time: "13:42", items: 1, total: 65, status: "Teslim Edildi" },
+    { id: "S044", time: "13:25", items: 5, total: 220, status: "Teslim Edildi" },
+  ]
 
   const formatChange = (change: number) => {
     const isPositive = change > 0
@@ -120,6 +178,17 @@ export default function ReportsPage() {
         {isPositive ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
         {Math.abs(change)}%
       </span>
+    )
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-[400px] items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
+          <p className="mt-2 text-muted-foreground">Rapor verileri yükleniyor...</p>
+        </div>
+      </div>
     )
   }
 
@@ -253,11 +322,13 @@ export default function ReportsPage() {
                     className="w-full rounded-t bg-blue-500 transition-all hover:bg-blue-400"
                     style={{ height: `${(hour.orders / maxHourlyOrders) * 180}px` }}
                   />
-                  <p className="text-[10px] text-muted-foreground">{hour.hour.split(":")[0]}</p>
+                  <p className="text-[10px] text-muted-foreground">{hour.hour}</p>
                 </div>
               ))}
             </div>
-            <p className="mt-2 text-center text-xs text-muted-foreground">En yoğun saat: 18:00 - 19:00</p>
+            <p className="mt-2 text-center text-xs text-muted-foreground">
+              En yoğun saat: {hourlyData.reduce((max, h) => h.orders > max.orders ? h : max, hourlyData[0])?.hour}:00
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -362,7 +433,7 @@ export default function ReportsPage() {
                 </svg>
                 <div className="absolute inset-0 flex items-center justify-center">
                   <div className="text-center">
-                    <p className="text-lg font-bold">₺15.7K</p>
+                    <p className="text-lg font-bold">₺{(stats.revenue / 1000).toFixed(1)}K</p>
                     <p className="text-xs text-muted-foreground">Toplam</p>
                   </div>
                 </div>

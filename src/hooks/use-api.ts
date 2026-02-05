@@ -112,6 +112,7 @@ export const API = {
     tables: "/api/tenant/tables",
     customers: "/api/tenant/customers",
     settings: "/api/tenant/settings",
+    reports: "/api/tenant/reports",
   },
   admin: {
     dashboard: "/api/admin/dashboard",
@@ -119,5 +120,11 @@ export const API = {
     subscriptions: "/api/admin/subscriptions",
     payments: "/api/admin/payments",
     settings: "/api/admin/settings",
+  },
+  public: {
+    menu: "/api/public/menu",
+    orders: "/api/public/orders",
+    chat: "/api/public/chat",
+    waiterCall: "/api/public/waiter-call",
   },
 }
