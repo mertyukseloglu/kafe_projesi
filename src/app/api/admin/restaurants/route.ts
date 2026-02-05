@@ -112,48 +112,52 @@ export async function GET(request: NextRequest) {
         ]
       }
 
-      const restaurants = await prisma.tenant.findMany({
-        orderBy: { createdAt: "desc" },
-        include: {
-          subscription: {
-            include: {
-              plan: true,
+      // Optimized: Fetch restaurants and revenue in parallel, avoiding N+1 queries
+      const [restaurants, revenueByTenant] = await Promise.all([
+        prisma.tenant.findMany({
+          orderBy: { createdAt: "desc" },
+          include: {
+            subscription: {
+              include: {
+                plan: true,
+              },
+            },
+            _count: {
+              select: {
+                orders: true,
+                tables: true,
+              },
             },
           },
-          _count: {
-            select: {
-              orders: true,
-              tables: true,
-            },
-          },
-        },
-        where: whereClause,
-      })
+          where: whereClause,
+        }),
+        // Single query to get all revenues grouped by tenant
+        prisma.order.groupBy({
+          by: ["tenantId"],
+          _sum: { total: true },
+        }),
+      ])
 
-      // Calculate revenue for each restaurant
-      const restaurantsWithRevenue = await Promise.all(
-        restaurants.map(async (r) => {
-          const revenue = await prisma.order.aggregate({
-            where: { tenantId: r.id },
-            _sum: { total: true },
-          })
-
-          return {
-            id: r.id,
-            name: r.name,
-            slug: r.slug,
-            email: r.email,
-            phone: r.phone,
-            plan: r.subscription?.plan?.name || "Starter",
-            status: r.subscription?.status?.toLowerCase() || "trial",
-            isActive: r.isActive,
-            orders: r._count.orders,
-            revenue: Number(revenue._sum.total) || 0,
-            tables: r._count.tables,
-            createdAt: r.createdAt.toISOString().split("T")[0],
-          }
-        })
+      // Create a map for quick revenue lookup
+      const revenueMap = new Map(
+        revenueByTenant.map((r) => [r.tenantId, Number(r._sum.total) || 0])
       )
+
+      // Map restaurants with revenue (no additional queries needed)
+      const restaurantsWithRevenue = restaurants.map((r) => ({
+        id: r.id,
+        name: r.name,
+        slug: r.slug,
+        email: r.email,
+        phone: r.phone,
+        plan: r.subscription?.plan?.name || "Starter",
+        status: r.subscription?.status?.toLowerCase() || "trial",
+        isActive: r.isActive,
+        orders: r._count.orders,
+        revenue: revenueMap.get(r.id) || 0,
+        tables: r._count.tables,
+        createdAt: r.createdAt.toISOString().split("T")[0],
+      }))
 
       // Filter by status if needed
       const filteredRestaurants = status === "all"

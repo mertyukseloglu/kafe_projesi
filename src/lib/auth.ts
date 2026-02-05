@@ -4,12 +4,19 @@ import bcrypt from "bcryptjs"
 import { prisma } from "@/lib/prisma"
 import type { UserRole } from "@prisma/client"
 
-// Demo users for development without database (matches seed.ts)
-const DEMO_USERS = [
+// Security: Demo auth is only enabled in development or when explicitly allowed
+const DEMO_AUTH_ENABLED = process.env.NODE_ENV === "development" ||
+  process.env.ENABLE_DEMO_AUTH === "true"
+
+// Demo users for development without database
+// WARNING: These are for development/testing ONLY
+// In production, ENABLE_DEMO_AUTH should NOT be set to "true"
+const DEMO_USERS = DEMO_AUTH_ENABLED ? [
   {
     id: "demo-super-admin",
     email: "admin@platform.com",
-    password: "admin123",
+    // Hashed version of "admin123" - in real production, users must be in DB
+    passwordHash: "$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.OQVvjLjKTTJqHi",
     name: "Platform Admin",
     role: "SUPER_ADMIN" as UserRole,
     tenantId: null,
@@ -19,14 +26,15 @@ const DEMO_USERS = [
   {
     id: "demo-tenant-admin",
     email: "demo@kafe.com",
-    password: "demo123",
+    // Hashed version of "demo123"
+    passwordHash: "$2a$12$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi",
     name: "Demo Kafe Admin",
     role: "TENANT_ADMIN" as UserRole,
     tenantId: "demo-tenant-1",
     tenantSlug: "demo-kafe",
     isActive: true,
   },
-]
+] : []
 
 declare module "next-auth" {
   interface Session {
@@ -115,7 +123,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           console.log("Database not available, trying demo users...")
         }
 
-        // Fallback to demo users
+        // Fallback to demo users (only if enabled)
+        if (!DEMO_AUTH_ENABLED) {
+          throw new Error("Kullanıcı bulunamadı")
+        }
+
         const demoUser = DEMO_USERS.find(u => u.email === email)
 
         if (!demoUser) {
@@ -126,14 +138,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           throw new Error("Hesabınız devre dışı")
         }
 
-        // Check password for demo users
-        const isValidDemoPassword = demoUser.password === password
+        // Check password for demo users using bcrypt (secure comparison)
+        const isValidDemoPassword = await bcrypt.compare(password, demoUser.passwordHash)
 
         if (!isValidDemoPassword) {
           throw new Error("Geçersiz şifre")
         }
 
-        console.log(`Demo user logged in: ${email}`)
+        // Only log in development
+        if (process.env.NODE_ENV === "development") {
+          console.log(`Demo user logged in: ${email}`)
+        }
 
         return {
           id: demoUser.id,

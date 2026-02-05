@@ -3,13 +3,20 @@ import { z } from "zod"
 import { prisma } from "@/lib/prisma"
 import { hashPassword } from "@/lib/auth"
 import { sendWelcomeEmail } from "@/lib/email"
+import {
+  checkRateLimit,
+  rateLimitResponse,
+  RATE_LIMITS,
+  sanitizeString,
+  validateEmail,
+} from "@/lib/api-utils"
 import type { ApiResponse } from "@/types"
 
 const registerSchema = z.object({
-  name: z.string().min(2, "İsim en az 2 karakter olmalı"),
-  email: z.string().email("Geçerli bir email adresi girin"),
-  password: z.string().min(6, "Şifre en az 6 karakter olmalı"),
-  restaurantName: z.string().min(2, "Restoran adı en az 2 karakter olmalı"),
+  name: z.string().min(2, "İsim en az 2 karakter olmalı").max(100),
+  email: z.string().email("Geçerli bir email adresi girin").max(254),
+  password: z.string().min(6, "Şifre en az 6 karakter olmalı").max(128),
+  restaurantName: z.string().min(2, "Restoran adı en az 2 karakter olmalı").max(100),
 })
 
 function generateSlug(name: string): string {
@@ -29,6 +36,12 @@ function generateSlug(name: string): string {
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limiting - 3 kayıt/saat per IP (brute force koruması)
+    const rateLimit = checkRateLimit(request, RATE_LIMITS.registration)
+    if (!rateLimit.allowed) {
+      return rateLimitResponse(rateLimit.resetIn)
+    }
+
     const body = await request.json()
 
     // Validate input
@@ -42,9 +55,22 @@ export async function POST(request: NextRequest) {
 
     const { name, email, password, restaurantName } = validationResult.data
 
+    // Extra validation: Verify email format
+    const validatedEmail = validateEmail(email)
+    if (!validatedEmail) {
+      return NextResponse.json<ApiResponse>({
+        success: false,
+        error: "Geçersiz email adresi formatı",
+      }, { status: 400 })
+    }
+
+    // Sanitize user inputs
+    const safeName = sanitizeString(name)
+    const safeRestaurantName = sanitizeString(restaurantName)
+
     // Check if email already exists
     const existingUser = await prisma.user.findUnique({
-      where: { email },
+      where: { email: validatedEmail },
     })
 
     if (existingUser) {
@@ -54,12 +80,12 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Generate unique slug
-    let slug = generateSlug(restaurantName)
+    // Generate unique slug from sanitized restaurant name
+    let slug = generateSlug(safeRestaurantName)
     let slugExists = await prisma.tenant.findUnique({ where: { slug } })
     let counter = 1
     while (slugExists) {
-      slug = `${generateSlug(restaurantName)}-${counter}`
+      slug = `${generateSlug(safeRestaurantName)}-${counter}`
       slugExists = await prisma.tenant.findUnique({ where: { slug } })
       counter++
     }
@@ -92,12 +118,12 @@ export async function POST(request: NextRequest) {
 
     // Create tenant, user, and subscription in a transaction
     const result = await prisma.$transaction(async (tx) => {
-      // Create tenant
+      // Create tenant with sanitized values
       const tenant = await tx.tenant.create({
         data: {
-          name: restaurantName,
+          name: safeRestaurantName,
           slug,
-          email,
+          email: validatedEmail,
           settings: {
             currency: "TRY",
             language: "tr",
@@ -108,9 +134,9 @@ export async function POST(request: NextRequest) {
       // Create user as TENANT_ADMIN
       const user = await tx.user.create({
         data: {
-          email,
+          email: validatedEmail,
           passwordHash,
-          name,
+          name: safeName,
           role: "TENANT_ADMIN",
           tenantId: tenant.id,
         },
@@ -136,9 +162,9 @@ export async function POST(request: NextRequest) {
 
     // Send welcome email (async, don't wait)
     sendWelcomeEmail({
-      name,
-      email,
-      restaurantName,
+      name: safeName,
+      email: validatedEmail,
+      restaurantName: safeRestaurantName,
       loginUrl: `${process.env.NEXTAUTH_URL || "http://localhost:3000"}/login`,
     }).catch((err) => console.error("Welcome email error:", err))
 

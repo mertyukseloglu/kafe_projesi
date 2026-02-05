@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import {
+  checkRateLimit,
+  rateLimitResponse,
+  RATE_LIMITS,
+  sanitizeString,
+} from "@/lib/api-utils"
 import type { ApiResponse } from "@/types"
 
 interface CouponValidation {
@@ -16,6 +22,12 @@ export async function POST(
   request: NextRequest
 ): Promise<NextResponse<ApiResponse<CouponValidation>>> {
   try {
+    // Rate limiting - 5 istek/dakika per IP
+    const rateLimit = checkRateLimit(request, RATE_LIMITS.couponValidate)
+    if (!rateLimit.allowed) {
+      return rateLimitResponse(rateLimit.resetIn) as NextResponse<ApiResponse<CouponValidation>>
+    }
+
     const body = await request.json()
     const { code, tenantSlug, orderTotal, customerId } = body
 
@@ -29,7 +41,9 @@ export async function POST(
       )
     }
 
-    const formattedCode = code.toUpperCase().replace(/\s/g, "")
+    // Sanitize and format code - limit to 50 chars
+    const sanitizedCode = sanitizeString(code).slice(0, 50)
+    const formattedCode = sanitizedCode.toUpperCase().replace(/\s/g, "")
 
     try {
       // Tenant'ı bul

@@ -88,21 +88,30 @@ export async function GET(
       ? (settings.theme as Record<string, unknown>).primaryColor as string | undefined
       : undefined
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        tenant: {
-          id: tenant.id,
-          name: tenant.name,
-          slug: tenant.slug,
-          logo: tenant.logo || undefined,
-          phone: tenant.phone || undefined,
-          primaryColor,
+    // Return with cache headers for better performance
+    // Menu data is relatively stable - cache for 5 minutes, stale-while-revalidate for 10 minutes
+    return NextResponse.json(
+      {
+        success: true,
+        data: {
+          tenant: {
+            id: tenant.id,
+            name: tenant.name,
+            slug: tenant.slug,
+            logo: tenant.logo || undefined,
+            phone: tenant.phone || undefined,
+            primaryColor,
+          },
+          categories,
+          items,
         },
-        categories,
-        items,
       },
-    })
+      {
+        headers: {
+          "Cache-Control": "public, max-age=300, stale-while-revalidate=600",
+        },
+      }
+    )
   } catch (error) {
     console.error("Menu fetch error:", error)
     return NextResponse.json(

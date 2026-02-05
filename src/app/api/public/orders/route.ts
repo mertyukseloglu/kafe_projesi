@@ -5,6 +5,13 @@ import { notifyNewOrder } from "@/lib/pusher"
 import { logOrderCreate } from "@/lib/services/activity"
 import { addLoyaltyPoints } from "@/lib/services/loyalty"
 import { sendOrderNotification } from "@/lib/email"
+import {
+  checkRateLimit,
+  rateLimitResponse,
+  RATE_LIMITS,
+  validatePrice,
+  sanitizeString,
+} from "@/lib/api-utils"
 import type { ApiResponse, Order } from "@/types"
 
 // Sipariş numarası oluştur
@@ -20,6 +27,12 @@ export async function POST(
   request: NextRequest
 ): Promise<NextResponse<ApiResponse<{ orderId: string; orderNumber: string }>>> {
   try {
+    // Rate limiting - 10 sipariş/saat per IP
+    const rateLimit = checkRateLimit(request, RATE_LIMITS.publicOrders)
+    if (!rateLimit.allowed) {
+      return rateLimitResponse(rateLimit.resetIn) as NextResponse<ApiResponse<{ orderId: string; orderNumber: string }>>
+    }
+
     const body = await request.json()
 
     // Validasyon
@@ -37,6 +50,21 @@ export async function POST(
 
     const { tenantSlug, tableNumber, items, customerName, customerPhone, notes } =
       validationResult.data
+
+    // Extra security: Sanitize user inputs
+    const safeNotes = notes ? sanitizeString(notes) : undefined
+    const safeCustomerName = customerName ? sanitizeString(customerName) : undefined
+
+    // Validate all prices in items
+    for (const item of items) {
+      const validatedPrice = validatePrice(item.price)
+      if (validatedPrice === null || validatedPrice <= 0) {
+        return NextResponse.json(
+          { success: false, error: "Geçersiz ürün fiyatı" },
+          { status: 400 }
+        )
+      }
+    }
 
     // Tenant'ı bul
     const tenant = await prisma.tenant.findUnique({
@@ -81,7 +109,7 @@ export async function POST(
           data: {
             visitCount: { increment: 1 },
             lastVisitAt: new Date(),
-            name: customerName || existingCustomer.name,
+            name: safeCustomerName || existingCustomer.name,
           },
         })
       } else {
@@ -89,7 +117,7 @@ export async function POST(
           data: {
             tenantId: tenant.id,
             phone: customerPhone,
-            name: customerName,
+            name: safeCustomerName,
             visitCount: 1,
             lastVisitAt: new Date(),
           },
@@ -117,7 +145,7 @@ export async function POST(
         status: "PENDING",
         subtotal,
         total: subtotal, // İndirim yoksa aynı
-        notes,
+        notes: safeNotes,
         paymentStatus: "PENDING",
         items: {
           create: items.map((item) => ({
@@ -203,7 +231,7 @@ export async function POST(
           price: item.price,
         })),
         total: subtotal,
-        customerName: customerName || undefined,
+        customerName: safeCustomerName || undefined,
       }).catch((err) => console.error("Email notification error:", err))
     }
 
