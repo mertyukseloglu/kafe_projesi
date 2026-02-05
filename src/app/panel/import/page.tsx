@@ -1,9 +1,10 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import Link from "next/link"
 import {
   Upload,
   FileSpreadsheet,
@@ -13,14 +14,39 @@ import {
   Loader2,
   FileText,
   Image,
-  Table,
+  LayoutTemplate,
   Link2,
   Trash2,
   RefreshCw,
   X,
+  Coffee,
+  UtensilsCrossed,
+  Pizza,
+  Beer,
+  Cake,
+  ExternalLink,
 } from "lucide-react"
 
 type ImportTab = "csv" | "photos" | "templates" | "api"
+
+interface MenuTemplate {
+  id: string
+  name: string
+  description: string
+  icon: string
+  categoryCount: number
+  itemCount: number
+}
+
+interface TemplateResult {
+  success: boolean
+  message?: string
+  stats?: {
+    categoriesCreated: number
+    itemsCreated: number
+  }
+  error?: string
+}
 
 interface ImportResult {
   success: boolean
@@ -57,6 +83,88 @@ export default function ImportPage() {
   const [isUploadingPhotos, setIsUploadingPhotos] = useState(false)
   const [photoResult, setPhotoResult] = useState<PhotoResult | null>(null)
   const photoInputRef = useRef<HTMLInputElement>(null)
+
+  // Template State
+  const [templates, setTemplates] = useState<MenuTemplate[]>([])
+  const [loadingTemplates, setLoadingTemplates] = useState(false)
+  const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null)
+  const [templateMode, setTemplateMode] = useState<"add" | "replace">("add")
+  const [applyingTemplate, setApplyingTemplate] = useState(false)
+  const [templateResult, setTemplateResult] = useState<TemplateResult | null>(null)
+
+  // Load templates on mount
+  useEffect(() => {
+    if (activeTab === "templates" && templates.length === 0) {
+      loadTemplates()
+    }
+  }, [activeTab])
+
+  const loadTemplates = async () => {
+    setLoadingTemplates(true)
+    try {
+      const res = await fetch("/api/tenant/import/templates")
+      const data = await res.json()
+      if (data.templates) {
+        setTemplates(data.templates)
+      }
+    } catch {
+      console.error("Failed to load templates")
+    } finally {
+      setLoadingTemplates(false)
+    }
+  }
+
+  const getTemplateIcon = (icon: string) => {
+    switch (icon) {
+      case "☕": return Coffee
+      case "🍽️": return UtensilsCrossed
+      case "🍕": return Pizza
+      case "🍺": return Beer
+      case "🧁": return Cake
+      default: return LayoutTemplate
+    }
+  }
+
+  const handleApplyTemplate = async () => {
+    if (!selectedTemplate) return
+
+    setApplyingTemplate(true)
+    setTemplateResult(null)
+
+    try {
+      const res = await fetch("/api/tenant/import/templates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          templateId: selectedTemplate,
+          mode: templateMode,
+        }),
+      })
+
+      const data = await res.json()
+
+      if (data.success) {
+        setTemplateResult({
+          success: true,
+          message: data.message,
+          stats: data.stats,
+        })
+        setSelectedTemplate(null)
+      } else {
+        setTemplateResult({
+          success: false,
+          error: data.error || "Şablon uygulanamadı",
+        })
+      }
+    } catch {
+      setTemplateResult({
+        success: false,
+        error: "Bağlantı hatası oluştu",
+      })
+    } finally {
+      setApplyingTemplate(false)
+    }
+  }
 
   // CSV Handlers
   const handleDragOver = (e: React.DragEvent) => {
@@ -216,26 +324,29 @@ export default function ImportPage() {
         {[
           { id: "csv" as const, label: "CSV / Excel", icon: FileSpreadsheet },
           { id: "photos" as const, label: "Fotoğraflar", icon: Image },
-          { id: "templates" as const, label: "Şablonlar", icon: Table, disabled: true },
-          { id: "api" as const, label: "API / Webhook", icon: Link2, disabled: true },
+          { id: "templates" as const, label: "Şablonlar", icon: LayoutTemplate },
         ].map((tab) => (
           <button
             key={tab.id}
-            onClick={() => !tab.disabled && setActiveTab(tab.id)}
-            disabled={tab.disabled}
+            onClick={() => setActiveTab(tab.id)}
             className={`flex items-center gap-2 px-4 py-3 border-b-2 transition-colors ${
               activeTab === tab.id
                 ? "border-primary text-primary"
-                : tab.disabled
-                ? "border-transparent text-muted-foreground/50 cursor-not-allowed"
                 : "border-transparent text-muted-foreground hover:text-foreground"
             }`}
           >
             <tab.icon className="h-4 w-4" />
             {tab.label}
-            {tab.disabled && <Badge variant="outline" className="text-[10px] ml-1">Yakında</Badge>}
           </button>
         ))}
+        <Link
+          href="/panel/api-docs"
+          className="flex items-center gap-2 px-4 py-3 border-b-2 border-transparent text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <Link2 className="h-4 w-4" />
+          API & Webhook
+          <ExternalLink className="h-3 w-3" />
+        </Link>
       </div>
 
       {/* CSV Import Tab */}
@@ -608,30 +719,182 @@ export default function ImportPage() {
         </Card>
       )}
 
-      {/* Templates Tab (Coming Soon) */}
+      {/* Templates Tab */}
       {activeTab === "templates" && (
         <Card>
-          <CardContent className="py-12 text-center">
-            <Table className="h-16 w-16 mx-auto text-slate-300 mb-4" />
-            <h3 className="text-xl font-semibold text-slate-600 mb-2">Yakında Geliyor</h3>
-            <p className="text-muted-foreground max-w-md mx-auto">
-              Hazır menü şablonlarından seçim yaparak hızlıca başlayın.
-              Kafe, restoran, bar gibi farklı işletme türleri için optimize edilmiş şablonlar.
-            </p>
-          </CardContent>
-        </Card>
-      )}
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <LayoutTemplate className="h-5 w-5" />
+              Hazır Menü Şablonları
+            </CardTitle>
+            <CardDescription>
+              İşletme türünüze uygun hazır şablondan seçerek hızlıca başlayın. Kategoriler ve ürünler otomatik oluşturulur.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Import Mode */}
+            <div>
+              <label className="text-sm font-medium mb-2 block">Uygulama Modu</label>
+              <div className="flex gap-4">
+                <button
+                  onClick={() => setTemplateMode("add")}
+                  className={`flex-1 p-4 rounded-lg border-2 transition-all ${
+                    templateMode === "add"
+                      ? "border-primary bg-primary/5"
+                      : "border-slate-200 hover:border-slate-300"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <Upload className={`h-5 w-5 ${templateMode === "add" ? "text-primary" : "text-slate-400"}`} />
+                    <div className="text-left">
+                      <p className="font-medium">Ekle</p>
+                      <p className="text-sm text-muted-foreground">Mevcut menüye ekle</p>
+                    </div>
+                  </div>
+                </button>
+                <button
+                  onClick={() => setTemplateMode("replace")}
+                  className={`flex-1 p-4 rounded-lg border-2 transition-all ${
+                    templateMode === "replace"
+                      ? "border-red-500 bg-red-50"
+                      : "border-slate-200 hover:border-slate-300"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <RefreshCw className={`h-5 w-5 ${templateMode === "replace" ? "text-red-500" : "text-slate-400"}`} />
+                    <div className="text-left">
+                      <p className="font-medium">Değiştir</p>
+                      <p className="text-sm text-muted-foreground">Mevcut menüyü sil ve yenile</p>
+                    </div>
+                  </div>
+                </button>
+              </div>
+              {templateMode === "replace" && (
+                <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
+                  <AlertCircle className="h-4 w-4" />
+                  Dikkat: Bu işlem mevcut tüm menü ürünlerini silecektir!
+                </p>
+              )}
+            </div>
 
-      {/* API Tab (Coming Soon) */}
-      {activeTab === "api" && (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <Link2 className="h-16 w-16 mx-auto text-slate-300 mb-4" />
-            <h3 className="text-xl font-semibold text-slate-600 mb-2">Yakında Geliyor</h3>
-            <p className="text-muted-foreground max-w-md mx-auto">
-              Webhook entegrasyonu ile POS sistemleri, muhasebe yazılımları ve
-              diğer harici sistemlerle otomatik veri senkronizasyonu.
-            </p>
+            {/* Template Grid */}
+            {loadingTemplates ? (
+              <div className="py-12 text-center">
+                <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+                <p className="mt-2 text-muted-foreground">Şablonlar yükleniyor...</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {templates.map((template) => {
+                  const IconComponent = getTemplateIcon(template.icon)
+                  const isSelected = selectedTemplate === template.id
+                  return (
+                    <button
+                      key={template.id}
+                      onClick={() => setSelectedTemplate(isSelected ? null : template.id)}
+                      className={`relative p-4 rounded-xl border-2 text-left transition-all ${
+                        isSelected
+                          ? "border-primary bg-primary/5 ring-2 ring-primary/20"
+                          : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+                      }`}
+                    >
+                      {isSelected && (
+                        <div className="absolute top-2 right-2">
+                          <CheckCircle className="h-5 w-5 text-primary" />
+                        </div>
+                      )}
+                      <div className="flex items-start gap-3">
+                        <div className={`p-3 rounded-lg ${isSelected ? "bg-primary/10" : "bg-slate-100"}`}>
+                          <IconComponent className={`h-6 w-6 ${isSelected ? "text-primary" : "text-slate-600"}`} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xl">{template.icon}</span>
+                            <h3 className="font-semibold truncate">{template.name}</h3>
+                          </div>
+                          <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{template.description}</p>
+                          <div className="flex gap-3 mt-3">
+                            <Badge variant="secondary" className="text-xs">
+                              {template.categoryCount} kategori
+                            </Badge>
+                            <Badge variant="secondary" className="text-xs">
+                              {template.itemCount} ürün
+                            </Badge>
+                          </div>
+                        </div>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+
+            {/* Apply Button */}
+            {selectedTemplate && (
+              <div className="flex justify-center pt-4">
+                <Button
+                  onClick={handleApplyTemplate}
+                  disabled={applyingTemplate}
+                  size="lg"
+                  className="px-8"
+                >
+                  {applyingTemplate ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Uygulanıyor...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="mr-2 h-4 w-4" />
+                      Şablonu Uygula
+                    </>
+                  )}
+                </Button>
+              </div>
+            )}
+
+            {/* Template Result */}
+            {templateResult && (
+              <div
+                className={`rounded-lg p-4 ${
+                  templateResult.success ? "bg-green-50 border border-green-200" : "bg-red-50 border border-red-200"
+                }`}
+              >
+                {templateResult.success ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-green-700">
+                      <CheckCircle className="h-5 w-5" />
+                      <span className="font-medium">{templateResult.message}</span>
+                    </div>
+                    {templateResult.stats && (
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div className="bg-white rounded-lg p-3 text-center">
+                          <p className="text-2xl font-bold text-green-600">{templateResult.stats.categoriesCreated}</p>
+                          <p className="text-muted-foreground">Kategori oluşturuldu</p>
+                        </div>
+                        <div className="bg-white rounded-lg p-3 text-center">
+                          <p className="text-2xl font-bold text-green-600">{templateResult.stats.itemsCreated}</p>
+                          <p className="text-muted-foreground">Ürün eklendi</p>
+                        </div>
+                      </div>
+                    )}
+                    <div className="flex justify-center">
+                      <Link href="/panel/menu">
+                        <Button variant="outline">
+                          Menüyü Görüntüle
+                          <ExternalLink className="ml-2 h-4 w-4" />
+                        </Button>
+                      </Link>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-red-700">
+                    <AlertCircle className="h-5 w-5" />
+                    <span>{templateResult.error}</span>
+                  </div>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
