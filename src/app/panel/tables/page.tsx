@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useRef } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import {
@@ -16,8 +16,11 @@ import {
   List,
   RefreshCw,
   Loader2,
+  X,
+  Printer,
 } from "lucide-react"
 import { useFetch, useMutation, API } from "@/hooks/use-api"
+import { QRCodeSVG } from "qrcode.react"
 
 // Tip tanımları
 interface Table {
@@ -65,6 +68,8 @@ export default function TablesPage() {
   const [editTable, setEditTable] = useState<Table | null>(null)
   const [selectedTables, setSelectedTables] = useState<string[]>([])
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [qrModalTable, setQrModalTable] = useState<Table | null>(null)
+  const qrRef = useRef<HTMLDivElement>(null)
 
   // Form state
   const [formData, setFormData] = useState({
@@ -124,10 +129,80 @@ export default function TablesPage() {
     alert(`${selectedTables.length} adet QR kod indiriliyor... (Demo)`)
   }
 
-  // Tek QR indir
-  const downloadQR = (tableNumber: string) => {
-    const url = getQRUrl(tableNumber)
-    alert(`Masa ${tableNumber} QR kodu indiriliyor...\n\nURL: ${url}`)
+  // QR modal aç
+  const openQRModal = (table: Table) => {
+    setQrModalTable(table)
+  }
+
+  // QR kodu indir
+  const downloadQRCode = () => {
+    if (!qrModalTable || !qrRef.current) return
+
+    const svg = qrRef.current.querySelector("svg")
+    if (!svg) return
+
+    const svgData = new XMLSerializer().serializeToString(svg)
+    const canvas = document.createElement("canvas")
+    const ctx = canvas.getContext("2d")
+    const img = new Image()
+
+    img.onload = () => {
+      canvas.width = 400
+      canvas.height = 400
+      if (ctx) {
+        ctx.fillStyle = "white"
+        ctx.fillRect(0, 0, canvas.width, canvas.height)
+        ctx.drawImage(img, 0, 0, 400, 400)
+
+        const pngFile = canvas.toDataURL("image/png")
+        const downloadLink = document.createElement("a")
+        downloadLink.download = `masa-${qrModalTable.number}-qr.png`
+        downloadLink.href = pngFile
+        downloadLink.click()
+      }
+    }
+
+    img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svgData)))
+  }
+
+  // QR yazdır
+  const printQR = () => {
+    if (!qrModalTable) return
+    const printWindow = window.open("", "_blank")
+    if (!printWindow) return
+
+    const url = getQRUrl(qrModalTable.number)
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Masa ${qrModalTable.number} QR Kod</title>
+          <style>
+            body { font-family: sans-serif; text-align: center; padding: 40px; }
+            .qr-container { display: inline-block; padding: 20px; border: 2px solid #000; border-radius: 10px; }
+            h1 { margin: 0 0 10px 0; font-size: 24px; }
+            p { margin: 5px 0; color: #666; font-size: 14px; }
+            .table-num { font-size: 48px; font-weight: bold; margin: 20px 0; }
+          </style>
+        </head>
+        <body>
+          <div class="qr-container">
+            <h1>Demo Kafe</h1>
+            <div class="table-num">Masa ${qrModalTable.number}</div>
+            <div id="qr"></div>
+            <p>QR kodu okutarak menüyü görüntüleyin</p>
+          </div>
+          <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"><\/script>
+          <script>
+            QRCode.toCanvas(document.createElement('canvas'), '${url}', { width: 200 }, function(err, canvas) {
+              if (!err) document.getElementById('qr').appendChild(canvas);
+              setTimeout(() => window.print(), 500);
+            });
+          <\/script>
+        </body>
+      </html>
+    `)
+    printWindow.document.close()
   }
 
   // Masa sil
@@ -330,7 +405,7 @@ export default function TablesPage() {
                     variant="outline"
                     size="sm"
                     className="flex-1"
-                    onClick={() => downloadQR(table.number)}
+                    onClick={() => openQRModal(table)}
                   >
                     <QrCode className="mr-1 h-3 w-3" />
                     QR
@@ -401,7 +476,7 @@ export default function TablesPage() {
                     </td>
                     <td className="p-3">
                       <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="sm" onClick={() => downloadQR(table.number)}>
+                        <Button variant="ghost" size="sm" onClick={() => openQRModal(table)}>
                           <QrCode className="h-4 w-4" />
                         </Button>
                         <Button variant="ghost" size="sm" onClick={() => openEditModal(table)}>
@@ -502,6 +577,58 @@ export default function TablesPage() {
                   </Button>
                 </div>
               </form>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* QR Code Modal */}
+      {qrModalTable && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <Card className="w-full max-w-sm">
+            <CardContent className="p-6">
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-lg font-semibold">Masa {qrModalTable.number} QR Kodu</h2>
+                <Button variant="ghost" size="icon" onClick={() => setQrModalTable(null)}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+
+              <div ref={qrRef} className="mb-4 flex justify-center rounded-lg bg-white p-6">
+                <QRCodeSVG
+                  value={getQRUrl(qrModalTable.number)}
+                  size={200}
+                  level="H"
+                  includeMargin
+                />
+              </div>
+
+              <p className="mb-4 text-center text-sm text-muted-foreground">
+                {qrModalTable.area} • {qrModalTable.capacity} kişilik
+              </p>
+
+              <div className="mb-4 rounded-lg bg-muted p-3">
+                <p className="break-all text-xs text-muted-foreground">
+                  {getQRUrl(qrModalTable.number)}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <Button variant="outline" onClick={downloadQRCode}>
+                  <Download className="mr-1 h-4 w-4" />
+                  İndir
+                </Button>
+                <Button variant="outline" onClick={printQR}>
+                  <Printer className="mr-1 h-4 w-4" />
+                  Yazdır
+                </Button>
+                <Button variant="outline" asChild>
+                  <a href={getQRUrl(qrModalTable.number)} target="_blank" rel="noopener">
+                    <ExternalLink className="mr-1 h-4 w-4" />
+                    Aç
+                  </a>
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </div>

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { prisma } from "@/lib/prisma"
 import { hashPassword } from "@/lib/auth"
+import { sendWelcomeEmail } from "@/lib/email"
 import type { ApiResponse } from "@/types"
 
 const registerSchema = z.object({
@@ -132,6 +133,14 @@ export async function POST(request: NextRequest) {
 
       return { tenant, user, subscription }
     })
+
+    // Send welcome email (async, don't wait)
+    sendWelcomeEmail({
+      name,
+      email,
+      restaurantName,
+      loginUrl: `${process.env.NEXTAUTH_URL || "http://localhost:3000"}/login`,
+    }).catch((err) => console.error("Welcome email error:", err))
 
     return NextResponse.json<ApiResponse>({
       success: true,

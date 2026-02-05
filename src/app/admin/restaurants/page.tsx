@@ -1,25 +1,38 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import {
   Plus,
   Search,
-  MoreVertical,
   Edit,
   Trash2,
   ExternalLink,
   Eye,
   EyeOff,
-  Store,
-  ShoppingCart,
-  Users,
+  Loader2,
 } from "lucide-react"
+import { useFetch } from "@/hooks/use-api"
 
-// Demo restoranlar
-const demoRestaurants = [
+interface Restaurant {
+  id: string
+  name: string
+  slug: string
+  email: string
+  phone: string
+  plan: string
+  status: string
+  isActive: boolean
+  orders: number
+  revenue: number
+  tables: number
+  createdAt: string
+}
+
+// Fallback demo data
+const fallbackRestaurants: Restaurant[] = [
   {
     id: "1",
     name: "Demo Kafe",
@@ -106,9 +119,28 @@ const planConfig: Record<string, { color: string }> = {
 }
 
 export default function RestaurantsPage() {
-  const [restaurants, setRestaurants] = useState(demoRestaurants)
+  const { data: apiData, isLoading } = useFetch<Restaurant[]>("/api/admin/restaurants")
+  const [restaurants, setRestaurants] = useState<Restaurant[]>(fallbackRestaurants)
   const [searchQuery, setSearchQuery] = useState("")
   const [filterStatus, setFilterStatus] = useState("all")
+
+  // Use API data when available
+  useEffect(() => {
+    if (apiData) {
+      setRestaurants(apiData)
+    }
+  }, [apiData])
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-[400px] items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
+          <p className="mt-2 text-slate-400">Restoranlar yükleniyor...</p>
+        </div>
+      </div>
+    )
+  }
 
   const filteredRestaurants = restaurants.filter(r => {
     if (searchQuery) {

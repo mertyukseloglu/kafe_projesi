@@ -1,6 +1,5 @@
 "use client"
 
-import { useState } from "react"
 import Link from "next/link"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -9,32 +8,54 @@ import {
   CreditCard,
   ShoppingCart,
   TrendingUp,
-  Users,
   ArrowRight,
-  AlertCircle,
   CheckCircle,
   Clock,
   Activity,
+  Loader2,
 } from "lucide-react"
+import { useFetch } from "@/hooks/use-api"
 
-// Demo veriler
-const demoStats = {
-  totalRestaurants: 12,
-  newThisMonth: 3,
-  activeSubscriptions: 10,
-  trialSubscriptions: 2,
-  todayOrders: 156,
-  todayRevenue: 24850,
-  mrr: 5990,
-  mrrChange: 15.2,
+interface DashboardData {
+  stats: {
+    totalRestaurants: number
+    newThisMonth: number
+    activeSubscriptions: number
+    trialSubscriptions: number
+    todayOrders: number
+    todayRevenue: number
+    mrr: number
+    mrrChange: number
+  }
+  recentRestaurants: Array<{
+    id: string
+    name: string
+    slug: string
+    plan: string
+    status: string
+    orders: number
+  }>
 }
 
-const demoRestaurants = [
-  { id: "1", name: "Demo Kafe", slug: "demo-kafe", plan: "Growth", status: "active", orders: 18 },
-  { id: "2", name: "Lezzet Durağı", slug: "lezzet-duragi", plan: "Pro", status: "active", orders: 32 },
-  { id: "3", name: "Kahve Evi", slug: "kahve-evi", plan: "Starter", status: "trial", orders: 8 },
-  { id: "4", name: "Tatlı Köşe", slug: "tatli-kose", plan: "Growth", status: "active", orders: 24 },
-]
+// Fallback demo data
+const fallbackData: DashboardData = {
+  stats: {
+    totalRestaurants: 12,
+    newThisMonth: 3,
+    activeSubscriptions: 10,
+    trialSubscriptions: 2,
+    todayOrders: 156,
+    todayRevenue: 24850,
+    mrr: 5990,
+    mrrChange: 15.2,
+  },
+  recentRestaurants: [
+    { id: "1", name: "Demo Kafe", slug: "demo-kafe", plan: "Growth", status: "active", orders: 18 },
+    { id: "2", name: "Lezzet Durağı", slug: "lezzet-duragi", plan: "Pro", status: "active", orders: 32 },
+    { id: "3", name: "Kahve Evi", slug: "kahve-evi", plan: "Starter", status: "trial", orders: 8 },
+    { id: "4", name: "Tatlı Köşe", slug: "tatli-kose", plan: "Growth", status: "active", orders: 24 },
+  ],
+}
 
 const systemStatus = [
   { name: "Veritabanı", status: "operational", latency: "12ms" },
@@ -44,6 +65,22 @@ const systemStatus = [
 ]
 
 export default function SuperAdminDashboard() {
+  const { data: dashboardData, isLoading } = useFetch<DashboardData>("/api/admin/dashboard")
+
+  const data = dashboardData || fallbackData
+  const stats = data.stats
+  const recentRestaurants = data.recentRestaurants
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-[400px] items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
+          <p className="mt-2 text-slate-400">Yükleniyor...</p>
+        </div>
+      </div>
+    )
+  }
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -60,9 +97,9 @@ export default function SuperAdminDashboard() {
             <Store className="h-4 w-4 text-slate-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-white">{demoStats.totalRestaurants}</div>
+            <div className="text-3xl font-bold text-white">{stats.totalRestaurants}</div>
             <p className="text-xs text-slate-400">
-              <span className="text-green-400">+{demoStats.newThisMonth}</span> bu ay
+              <span className="text-green-400">+{stats.newThisMonth}</span> bu ay
             </p>
           </CardContent>
         </Card>
@@ -73,9 +110,9 @@ export default function SuperAdminDashboard() {
             <CreditCard className="h-4 w-4 text-slate-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-white">{demoStats.activeSubscriptions}</div>
+            <div className="text-3xl font-bold text-white">{stats.activeSubscriptions}</div>
             <p className="text-xs text-slate-400">
-              <span className="text-yellow-400">{demoStats.trialSubscriptions} trial</span>
+              <span className="text-yellow-400">{stats.trialSubscriptions} trial</span>
             </p>
           </CardContent>
         </Card>
@@ -86,9 +123,9 @@ export default function SuperAdminDashboard() {
             <ShoppingCart className="h-4 w-4 text-slate-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-white">{demoStats.todayOrders}</div>
+            <div className="text-3xl font-bold text-white">{stats.todayOrders}</div>
             <p className="text-xs text-slate-400">
-              Toplam: ₺{demoStats.todayRevenue.toLocaleString("tr-TR")}
+              Toplam: ₺{stats.todayRevenue.toLocaleString("tr-TR")}
             </p>
           </CardContent>
         </Card>
@@ -100,10 +137,10 @@ export default function SuperAdminDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-white">
-              ₺{demoStats.mrr.toLocaleString("tr-TR")}
+              ₺{stats.mrr.toLocaleString("tr-TR")}
             </div>
             <p className="text-xs text-slate-400">
-              <span className="text-green-400">+{demoStats.mrrChange}%</span> geçen aya göre
+              <span className="text-green-400">+{stats.mrrChange}%</span> geçen aya göre
             </p>
           </CardContent>
         </Card>
@@ -127,7 +164,7 @@ export default function SuperAdminDashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {demoRestaurants.map((restaurant) => (
+              {recentRestaurants.map((restaurant) => (
                 <div
                   key={restaurant.id}
                   className="flex items-center justify-between rounded-lg border border-slate-700 p-3"
