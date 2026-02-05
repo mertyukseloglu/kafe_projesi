@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { createOrderSchema } from "@/lib/validations/order"
 import { notifyNewOrder } from "@/lib/pusher"
+import { logOrderCreate } from "@/lib/services/activity"
+import { addLoyaltyPoints } from "@/lib/services/loyalty"
 import type { ApiResponse, Order } from "@/types"
 
 // Sipariş numarası oluştur
@@ -165,6 +167,28 @@ export async function POST(
         quantity: item.quantity,
       })),
     }).catch((err) => console.error("Pusher notification error:", err))
+
+    // Activity log
+    logOrderCreate({
+      tenantId: tenant.id,
+      customerId,
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      total: subtotal,
+      itemCount: items.length,
+      tableNumber,
+    }).catch((err) => console.error("Activity log error:", err))
+
+    // Loyalty puanları (sipariş oluşturulduğunda - ödeme sonrası da olabilir)
+    if (customerId) {
+      addLoyaltyPoints(tenant.id, customerId, order.id, subtotal)
+        .then((result) => {
+          if (result.pointsEarned > 0) {
+            console.log(`Loyalty: ${result.pointsEarned} puan kazanıldı`)
+          }
+        })
+        .catch((err) => console.error("Loyalty points error:", err))
+    }
 
     return NextResponse.json(
       {

@@ -81,6 +81,12 @@ model Tenant {
   customers     Customer[]
   subscription  Subscription?
 
+  // Loyalty & Analytics
+  loyaltyConfig   LoyaltyConfig?
+  loyaltyRewards  LoyaltyReward[]
+  dailyStats      DailyStats[]
+  waiterCalls     WaiterCall[]
+
   @@index([slug])
   @@index([isActive])
 }
@@ -387,6 +393,7 @@ model Customer {
 
   // Sadakat programı
   loyaltyPoints Int    @default(0)
+  loyaltyTier   LoyaltyTier @default(BRONZE)
   totalSpent    Decimal @default(0) @db.Decimal(10, 2)
   visitCount    Int     @default(0)
 
@@ -399,15 +406,335 @@ model Customer {
   // ["vip", "regular", "new"]
 
   lastVisitAt   DateTime?
+  birthDate     DateTime?
 
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  orders        Order[]
+  orders              Order[]
+  sessions            CustomerSession[]
+  loyaltyTransactions LoyaltyTransaction[]
+  activityLogs        ActivityLog[]
 
   @@unique([tenantId, phone])
   @@unique([tenantId, email])
   @@index([tenantId])
+  @@index([loyaltyTier])
+}
+
+// ==================== LOYALTY (SADAKAT) ====================
+
+enum LoyaltyTier {
+  BRONZE    // 0-499 puan
+  SILVER    // 500-1499 puan
+  GOLD      // 1500-4999 puan
+  PLATINUM  // 5000+ puan
+}
+
+enum LoyaltyTransactionType {
+  EARN          // Puan kazanma
+  REDEEM        // Puan harcama
+  BONUS         // Bonus puan (kampanya)
+  EXPIRE        // Puan süresi dolma
+  ADJUSTMENT    // Manuel düzeltme
+}
+
+model LoyaltyConfig {
+  id          String   @id @default(cuid())
+
+  tenantId    String   @unique
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Puan kazanma kuralları
+  pointsPerSpent      Int     @default(1)    // Her 1 TL = 1 puan
+  minSpendForPoints   Decimal @default(0) @db.Decimal(10, 2)  // Min harcama
+
+  // Tier eşikleri
+  silverThreshold     Int     @default(500)
+  goldThreshold       Int     @default(1500)
+  platinumThreshold   Int     @default(5000)
+
+  // Tier çarpanları (bonus puan)
+  bronzeMultiplier    Decimal @default(1) @db.Decimal(3, 2)
+  silverMultiplier    Decimal @default(1.25) @db.Decimal(3, 2)
+  goldMultiplier      Decimal @default(1.5) @db.Decimal(3, 2)
+  platinumMultiplier  Decimal @default(2) @db.Decimal(3, 2)
+
+  // Puan geçerliliği (gün, 0 = süresiz)
+  pointsValidityDays  Int     @default(365)
+
+  // Doğum günü bonusu
+  birthdayBonusPoints Int     @default(100)
+
+  isActive    Boolean  @default(true)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model LoyaltyReward {
+  id          String   @id @default(cuid())
+
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  name        String   // "Ücretsiz Kahve", "%10 İndirim"
+  description String?
+
+  // Ödül tipi
+  rewardType  String   // "free_item", "discount_percent", "discount_amount"
+
+  // Ödül değeri
+  pointsCost  Int      // Kaç puan gerekli
+  value       Decimal  @db.Decimal(10, 2)  // İndirim miktarı veya %
+
+  // Hangi ürünler için geçerli (boş = hepsi)
+  applicableItems Json @default("[]")  // menuItemId listesi
+
+  // Minimum tier gereksinimi
+  minTier     LoyaltyTier @default(BRONZE)
+
+  // Kullanım limiti (0 = sınırsız)
+  usageLimit  Int      @default(0)
+  usedCount   Int      @default(0)
+
+  isActive    Boolean  @default(true)
+  validFrom   DateTime @default(now())
+  validUntil  DateTime?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([isActive])
+}
+
+model LoyaltyTransaction {
+  id          String   @id @default(cuid())
+
+  tenantId    String
+  customerId  String
+  customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  type        LoyaltyTransactionType
+  points      Int      // Pozitif veya negatif
+
+  // İlişkili sipariş (varsa)
+  orderId     String?
+
+  // Açıklama
+  description String?
+
+  // İşlem öncesi ve sonrası bakiye
+  balanceBefore Int
+  balanceAfter  Int
+
+  createdAt   DateTime @default(now())
+
+  @@index([customerId])
+  @@index([tenantId])
+  @@index([createdAt])
+}
+
+// ==================== CUSTOMER SESSION (MÜŞTERİ OTURUMU) ====================
+
+enum SessionStatus {
+  ACTIVE      // Müşteri masada
+  ORDERING    // Sipariş veriyor
+  WAITING     // Sipariş bekliyor
+  COMPLETED   // Ödeme yapıldı, ayrıldı
+  ABANDONED   // Sipariş vermeden ayrıldı
+}
+
+model CustomerSession {
+  id          String   @id @default(cuid())
+
+  tenantId    String
+
+  // Müşteri (opsiyonel - anonim olabilir)
+  customerId  String?
+  customer    Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  // Masa
+  tableId     String?
+  tableNumber String?
+
+  // Session durumu
+  status      SessionStatus @default(ACTIVE)
+
+  // Cihaz bilgileri
+  deviceId    String?   // Tarayıcı fingerprint
+  userAgent   String?
+  ipAddress   String?
+
+  // Zaman bilgileri
+  startedAt   DateTime  @default(now())
+  lastActiveAt DateTime @default(now())
+  endedAt     DateTime?
+
+  // Oturum metrikleri
+  pageViews       Int   @default(0)
+  menuItemViews   Int   @default(0)
+  cartAdditions   Int   @default(0)
+  orderCount      Int   @default(0)
+  totalSpent      Decimal @default(0) @db.Decimal(10, 2)
+
+  // İlişkili siparişler
+  orderIds    Json     @default("[]")
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  activityLogs ActivityLog[]
+
+  @@index([tenantId])
+  @@index([customerId])
+  @@index([status])
+  @@index([startedAt])
+}
+
+// ==================== ACTIVITY LOG (AKTİVİTE LOGU) ====================
+
+enum ActivityType {
+  // Session
+  SESSION_START       // QR tarama / menü açma
+  SESSION_END         // Oturum kapanışı
+
+  // Menu
+  MENU_VIEW           // Menü görüntüleme
+  CATEGORY_VIEW       // Kategori görüntüleme
+  ITEM_VIEW           // Ürün detay görüntüleme
+  ITEM_SEARCH         // Ürün arama
+
+  // Cart
+  CART_ADD            // Sepete ekleme
+  CART_REMOVE         // Sepetten çıkarma
+  CART_UPDATE         // Miktar güncelleme
+  CART_CLEAR          // Sepeti temizleme
+
+  // Order
+  ORDER_CREATE        // Sipariş oluşturma
+  ORDER_CANCEL        // Sipariş iptali
+  ORDER_REORDER       // Tekrar sipariş
+
+  // Payment
+  PAYMENT_START       // Ödeme başlatma
+  PAYMENT_SUCCESS     // Ödeme başarılı
+  PAYMENT_FAILED      // Ödeme başarısız
+
+  // Other
+  WAITER_CALL         // Garson çağırma
+  FEEDBACK_SUBMIT     // Geri bildirim
+  LOYALTY_REDEEM      // Puan kullanma
+}
+
+model ActivityLog {
+  id          String   @id @default(cuid())
+
+  tenantId    String
+
+  // İlişkiler (opsiyonel)
+  customerId  String?
+  customer    Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  sessionId   String?
+  session     CustomerSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+
+  // Aktivite tipi
+  type        ActivityType
+
+  // Aktivite detayları (JSON)
+  data        Json     @default("{}")
+  // Örnek: { menuItemId: "xxx", quantity: 2, price: 50 }
+
+  // Konum bilgisi
+  tableNumber String?
+
+  // Zaman damgası
+  timestamp   DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([customerId])
+  @@index([sessionId])
+  @@index([type])
+  @@index([timestamp])
+}
+
+// ==================== DAILY STATS (GÜNLÜK İSTATİSTİKLER) ====================
+
+model DailyStats {
+  id          String   @id @default(cuid())
+
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  date        DateTime @db.Date
+
+  // Sipariş metrikleri
+  totalOrders     Int     @default(0)
+  completedOrders Int     @default(0)
+  cancelledOrders Int     @default(0)
+
+  // Gelir metrikleri
+  totalRevenue    Decimal @default(0) @db.Decimal(10, 2)
+  avgOrderValue   Decimal @default(0) @db.Decimal(10, 2)
+
+  // Müşteri metrikleri
+  uniqueCustomers   Int   @default(0)
+  newCustomers      Int   @default(0)
+  returningCustomers Int  @default(0)
+
+  // Session metrikleri
+  totalSessions     Int   @default(0)
+  avgSessionDuration Int  @default(0)  // saniye
+  conversionRate    Decimal @default(0) @db.Decimal(5, 2)  // %
+
+  // Popüler ürünler (JSON)
+  topItems    Json     @default("[]")
+  // [{ menuItemId, name, quantity, revenue }]
+
+  // Saat bazlı dağılım
+  hourlyOrders Json    @default("[]")
+  // [{ hour: 0, orders: 5, revenue: 500 }, ...]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([tenantId, date])
+  @@index([tenantId])
+  @@index([date])
+}
+
+// ==================== WAITER CALL (GARSON ÇAĞRISI) ====================
+
+enum WaiterCallStatus {
+  PENDING
+  ACKNOWLEDGED
+  RESOLVED
+  CANCELLED
+}
+
+model WaiterCall {
+  id          String   @id @default(cuid())
+
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  tableNumber String
+  reason      String   // "order", "payment", "assistance", "other"
+  message     String?
+
+  status      WaiterCallStatus @default(PENDING)
+
+  // Hangi personel aldı
+  assignedTo  String?
+
+  createdAt   DateTime @default(now())
+  acknowledgedAt DateTime?
+  resolvedAt  DateTime?
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([createdAt])
 }
 
 // ==================== PLATFORM SETTINGS ====================

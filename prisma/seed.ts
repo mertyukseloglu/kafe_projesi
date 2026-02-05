@@ -432,6 +432,96 @@ async function main() {
   }
   console.log("✅ Demo customers created")
 
+  // Loyalty Config
+  await prisma.loyaltyConfig.upsert({
+    where: { tenantId: demoTenant.id },
+    update: {},
+    create: {
+      tenantId: demoTenant.id,
+      pointsPerSpent: 1, // Her 1 TL = 1 puan
+      minSpendForPoints: 20, // Min 20 TL harcama
+      silverThreshold: 500,
+      goldThreshold: 1500,
+      platinumThreshold: 5000,
+      bronzeMultiplier: 1,
+      silverMultiplier: 1.25,
+      goldMultiplier: 1.5,
+      platinumMultiplier: 2,
+      pointsValidityDays: 365,
+      birthdayBonusPoints: 100,
+      isActive: true,
+    },
+  })
+  console.log("✅ Loyalty config created")
+
+  // Loyalty Rewards
+  const rewards = [
+    {
+      name: "Ücretsiz Türk Kahvesi",
+      description: "Herhangi bir siparişe ücretsiz Türk kahvesi",
+      rewardType: "free_item",
+      pointsCost: 100,
+      value: 45,
+      minTier: "BRONZE" as const,
+    },
+    {
+      name: "%10 İndirim",
+      description: "Toplam hesabınızda %10 indirim",
+      rewardType: "discount_percent",
+      pointsCost: 200,
+      value: 10,
+      minTier: "BRONZE" as const,
+    },
+    {
+      name: "Ücretsiz Tatlı",
+      description: "Cheesecake veya Tiramisu",
+      rewardType: "free_item",
+      pointsCost: 300,
+      value: 90,
+      minTier: "SILVER" as const,
+    },
+    {
+      name: "%20 İndirim",
+      description: "Toplam hesabınızda %20 indirim",
+      rewardType: "discount_percent",
+      pointsCost: 500,
+      value: 20,
+      minTier: "SILVER" as const,
+    },
+    {
+      name: "50 TL İndirim",
+      description: "100 TL üzeri siparişlerde 50 TL indirim",
+      rewardType: "discount_amount",
+      pointsCost: 750,
+      value: 50,
+      minTier: "GOLD" as const,
+    },
+    {
+      name: "VIP Kahvaltı",
+      description: "2 kişilik kahvaltı tabağı hediye",
+      rewardType: "free_item",
+      pointsCost: 1000,
+      value: 250,
+      minTier: "PLATINUM" as const,
+    },
+  ]
+
+  for (const reward of rewards) {
+    await prisma.loyaltyReward.upsert({
+      where: {
+        id: `${demoTenant.id}-${reward.name.toLowerCase().replace(/\s+/g, "-")}`,
+      },
+      update: {},
+      create: {
+        id: `${demoTenant.id}-${reward.name.toLowerCase().replace(/\s+/g, "-")}`,
+        tenantId: demoTenant.id,
+        ...reward,
+        isActive: true,
+      },
+    })
+  }
+  console.log("✅ Loyalty rewards created")
+
   console.log("\n🎉 Seeding completed!")
   console.log("\n📝 Demo bilgileri:")
   console.log("   Menü URL: /customer/menu/demo-kafe?table=1")
