@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
@@ -16,10 +16,20 @@ import {
   Gift,
   ShoppingBag,
   Edit,
-  MoreVertical,
+  RefreshCw,
+  Loader2,
 } from "lucide-react"
+import { useFetch, useMutation, API } from "@/hooks/use-api"
 
-// Demo müşteri verisi
+// Tip tanımları
+interface CustomerOrder {
+  id: string
+  orderNumber: string
+  total: number
+  date: string
+  items?: string[]
+}
+
 interface Customer {
   id: string
   name: string
@@ -31,15 +41,21 @@ interface Customer {
   lastVisitAt: string
   tags: string[]
   createdAt: string
-  orders: {
-    id: string
-    orderNumber: string
-    total: number
-    date: string
-    items: string[]
-  }[]
+  recentOrders?: CustomerOrder[]
 }
 
+interface CustomersData {
+  customers: Customer[]
+  total: number
+  stats: {
+    totalCustomers: number
+    newThisMonth: number
+    avgLoyaltyPoints: number
+    totalLoyaltyPoints: number
+  }
+}
+
+// Demo müşteri verisi
 const demoCustomers: Customer[] = [
   {
     id: "1",
@@ -52,10 +68,9 @@ const demoCustomers: Customer[] = [
     lastVisitAt: "2024-02-03",
     tags: ["vip", "düzenli"],
     createdAt: "2023-06-15",
-    orders: [
+    recentOrders: [
       { id: "o1", orderNumber: "S045", total: 145, date: "2024-02-03", items: ["Latte", "Cheesecake"] },
       { id: "o2", orderNumber: "S038", total: 85, date: "2024-01-28", items: ["Türk Kahvesi", "Brownie"] },
-      { id: "o3", orderNumber: "S025", total: 120, date: "2024-01-15", items: ["Cappuccino", "Sandviç"] },
     ],
   },
   {
@@ -69,9 +84,8 @@ const demoCustomers: Customer[] = [
     lastVisitAt: "2024-01-25",
     tags: ["yeni"],
     createdAt: "2023-12-01",
-    orders: [
+    recentOrders: [
       { id: "o4", orderNumber: "S032", total: 95, date: "2024-01-25", items: ["Ice Latte", "Tiramisu"] },
-      { id: "o5", orderNumber: "S019", total: 65, date: "2024-01-10", items: ["Limonata", "Kurabiye"] },
     ],
   },
   {
@@ -84,9 +98,8 @@ const demoCustomers: Customer[] = [
     lastVisitAt: "2024-02-04",
     tags: ["vip", "düzenli", "kahve sever"],
     createdAt: "2023-01-20",
-    orders: [
+    recentOrders: [
       { id: "o6", orderNumber: "S048", total: 180, date: "2024-02-04", items: ["Filtre Kahve x2", "Cheesecake", "Tost"] },
-      { id: "o7", orderNumber: "S042", total: 95, date: "2024-02-01", items: ["Latte", "Brownie"] },
     ],
   },
   {
@@ -99,9 +112,7 @@ const demoCustomers: Customer[] = [
     lastVisitAt: "2024-01-18",
     tags: ["yeni"],
     createdAt: "2024-01-05",
-    orders: [
-      { id: "o8", orderNumber: "S022", total: 120, date: "2024-01-18", items: ["Smoothie", "Sandviç"] },
-    ],
+    recentOrders: [],
   },
   {
     id: "5",
@@ -114,54 +125,71 @@ const demoCustomers: Customer[] = [
     lastVisitAt: "2024-02-02",
     tags: ["düzenli", "tatlı sever"],
     createdAt: "2023-08-10",
-    orders: [
+    recentOrders: [
       { id: "o9", orderNumber: "S046", total: 165, date: "2024-02-02", items: ["Sıcak Çikolata", "San Sebastian", "Tiramisu"] },
     ],
   },
 ]
 
-// İstatistikler
-const stats = {
+// Demo istatistikler
+const demoStats = {
   totalCustomers: 156,
   newThisMonth: 23,
   avgLoyaltyPoints: 125,
-  totalLoyaltyGiven: 19500,
+  totalLoyaltyPoints: 19500,
 }
 
 export default function CustomersPage() {
+  const { data, isLoading, refetch } = useFetch<CustomersData>(API.tenant.customers)
+  const { mutate, isLoading: isMutating } = useMutation()
+
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedTag, setSelectedTag] = useState<string>("all")
-  const [sortBy, setSortBy] = useState<string>("lastVisit")
+  const [sortBy, setSortBy] = useState<string>("lastVisitAt")
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
-  // Filtreleme
-  const filteredCustomers = demoCustomers.filter((customer) => {
-    const matchesSearch =
-      customer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      customer.phone?.includes(searchQuery) ||
-      customer.email?.toLowerCase().includes(searchQuery.toLowerCase())
-
-    const matchesTag = selectedTag === "all" || customer.tags.includes(selectedTag)
-
-    return matchesSearch && matchesTag
+  // Form state
+  const [formData, setFormData] = useState({
+    name: "",
+    phone: "",
+    email: "",
+    loyaltyPoints: 0,
   })
 
-  // Sıralama
-  const sortedCustomers = [...filteredCustomers].sort((a, b) => {
-    switch (sortBy) {
-      case "lastVisit":
-        return new Date(b.lastVisitAt).getTime() - new Date(a.lastVisitAt).getTime()
-      case "totalSpent":
-        return b.totalSpent - a.totalSpent
-      case "loyaltyPoints":
-        return b.loyaltyPoints - a.loyaltyPoints
-      case "visitCount":
-        return b.visitCount - a.visitCount
-      default:
-        return 0
-    }
-  })
+  // Use API data or fallback to demo
+  const customers = data?.customers || demoCustomers
+  const stats = data?.stats || demoStats
+
+  // Filtreleme ve sıralama
+  const sortedCustomers = useMemo(() => {
+    let filtered = customers.filter((customer) => {
+      const matchesSearch =
+        customer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        customer.phone?.includes(searchQuery) ||
+        customer.email?.toLowerCase().includes(searchQuery.toLowerCase())
+
+      const matchesTag = selectedTag === "all" || customer.tags.includes(selectedTag)
+
+      return matchesSearch && matchesTag
+    })
+
+    return [...filtered].sort((a, b) => {
+      switch (sortBy) {
+        case "lastVisitAt":
+          return new Date(b.lastVisitAt).getTime() - new Date(a.lastVisitAt).getTime()
+        case "totalSpent":
+          return b.totalSpent - a.totalSpent
+        case "loyaltyPoints":
+          return b.loyaltyPoints - a.loyaltyPoints
+        case "visitCount":
+          return b.visitCount - a.visitCount
+        default:
+          return 0
+      }
+    })
+  }, [customers, searchQuery, selectedTag, sortBy])
 
   const allTags = ["all", "vip", "düzenli", "yeni", "kahve sever", "tatlı sever"]
 
@@ -190,6 +218,30 @@ export default function CustomersPage() {
     }
   }
 
+  // Müşteri ekle
+  const handleAddCustomer = async (e: React.FormEvent) => {
+    e.preventDefault()
+    await mutate(API.tenant.customers, {
+      method: "POST",
+      body: JSON.stringify({
+        name: formData.name,
+        phone: formData.phone || undefined,
+        email: formData.email || undefined,
+        loyaltyPoints: formData.loyaltyPoints,
+      }),
+    })
+    setIsAddModalOpen(false)
+    setFormData({ name: "", phone: "", email: "", loyaltyPoints: 0 })
+    await refetch()
+  }
+
+  // Yenile
+  const handleRefresh = async () => {
+    setIsRefreshing(true)
+    await refetch()
+    setIsRefreshing(false)
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -198,10 +250,19 @@ export default function CustomersPage() {
           <h1 className="text-2xl font-bold">Müşteriler</h1>
           <p className="text-muted-foreground">Müşteri bilgileri ve sadakat programı</p>
         </div>
-        <Button onClick={() => setIsAddModalOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Yeni Müşteri
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={handleRefresh} disabled={isRefreshing || isLoading}>
+            {isLoading ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
+            )}
+          </Button>
+          <Button onClick={() => setIsAddModalOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Yeni Müşteri
+          </Button>
+        </div>
       </div>
 
       {/* İstatistikler */}
@@ -253,7 +314,7 @@ export default function CustomersPage() {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Toplam Puan</p>
-                <p className="text-2xl font-bold">{stats.totalLoyaltyGiven.toLocaleString()}</p>
+                <p className="text-2xl font-bold">{stats.totalLoyaltyPoints.toLocaleString()}</p>
               </div>
             </div>
           </CardContent>
@@ -299,7 +360,7 @@ export default function CustomersPage() {
               onChange={(e) => setSortBy(e.target.value)}
               className="rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
             >
-              <option value="lastVisit">Son Ziyaret</option>
+              <option value="lastVisitAt">Son Ziyaret</option>
               <option value="totalSpent">Toplam Harcama</option>
               <option value="loyaltyPoints">Puan</option>
               <option value="visitCount">Ziyaret Sayısı</option>
@@ -483,14 +544,14 @@ export default function CustomersPage() {
               <div>
                 <h3 className="mb-3 font-semibold">Son Siparişler</h3>
                 <div className="space-y-2">
-                  {selectedCustomer.orders.map((order) => (
+                  {(selectedCustomer.recentOrders || []).map((order) => (
                     <div
                       key={order.id}
                       className="flex items-center justify-between rounded-lg border p-3"
                     >
                       <div>
                         <p className="font-medium">#{order.orderNumber}</p>
-                        <p className="text-sm text-muted-foreground">{order.items.join(", ")}</p>
+                        <p className="text-sm text-muted-foreground">{(order.items || []).join(", ")}</p>
                       </div>
                       <div className="text-right">
                         <p className="font-semibold">₺{order.total}</p>
@@ -500,6 +561,9 @@ export default function CustomersPage() {
                       </div>
                     </div>
                   ))}
+                  {(!selectedCustomer.recentOrders || selectedCustomer.recentOrders.length === 0) && (
+                    <p className="text-center text-sm text-muted-foreground py-4">Henüz sipariş yok</p>
+                  )}
                 </div>
               </div>
 
@@ -530,12 +594,14 @@ export default function CustomersPage() {
               </Button>
             </CardHeader>
             <CardContent className="p-6">
-              <form className="space-y-4">
+              <form className="space-y-4" onSubmit={handleAddCustomer}>
                 <div>
                   <label className="text-sm font-medium">Ad Soyad *</label>
                   <input
                     type="text"
                     placeholder="Müşteri adı"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     className="mt-1 w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                     required
                   />
@@ -545,6 +611,8 @@ export default function CustomersPage() {
                   <input
                     type="tel"
                     placeholder="555-XXX-XXXX"
+                    value={formData.phone}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                     className="mt-1 w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                   />
                 </div>
@@ -553,6 +621,8 @@ export default function CustomersPage() {
                   <input
                     type="email"
                     placeholder="ornek@email.com"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     className="mt-1 w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                   />
                 </div>
@@ -561,7 +631,8 @@ export default function CustomersPage() {
                   <input
                     type="number"
                     placeholder="0"
-                    defaultValue={0}
+                    value={formData.loyaltyPoints}
+                    onChange={(e) => setFormData({ ...formData, loyaltyPoints: parseInt(e.target.value) || 0 })}
                     className="mt-1 w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                   />
                 </div>
@@ -569,7 +640,8 @@ export default function CustomersPage() {
                   <Button type="button" variant="outline" className="flex-1" onClick={() => setIsAddModalOpen(false)}>
                     İptal
                   </Button>
-                  <Button type="submit" className="flex-1">
+                  <Button type="submit" className="flex-1" disabled={isMutating}>
+                    {isMutating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                     Kaydet
                   </Button>
                 </div>

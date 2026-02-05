@@ -1,10 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import {
-  Settings,
   Store,
   Clock,
   Palette,
@@ -19,10 +18,52 @@ import {
   Mail,
   Phone,
   MapPin,
+  RefreshCw,
+  Loader2,
 } from "lucide-react"
+import { useFetch, useMutation, API } from "@/hooks/use-api"
+
+// Tip tanımları
+interface Staff {
+  id: string
+  name: string
+  email: string
+  role: string
+  isActive: boolean
+}
+
+interface SettingsData {
+  restaurant: {
+    id: string
+    name: string
+    slug: string
+    description?: string
+    phone?: string
+    email?: string
+    address?: string
+    city?: string
+    district?: string
+    logo?: string | null
+    coverImage?: string | null
+    settings?: Record<string, unknown>
+  }
+  staff: Staff[]
+  subscription?: {
+    plan: string
+    status: string
+    currentPeriodEnd?: string
+    limits?: {
+      maxOrders: number
+      maxTables: number
+      maxAiRequests: number
+      maxStaff: number
+    }
+  }
+}
 
 // Demo veriler
 const demoRestaurant = {
+  id: "demo-1",
   name: "Demo Kafe",
   slug: "demo-kafe",
   description: "Şehrin en keyifli kahve durağı",
@@ -33,6 +74,7 @@ const demoRestaurant = {
   district: "Kadıköy",
   logo: null,
   coverImage: null,
+  settings: {},
 }
 
 const demoWorkingHours = {
@@ -45,7 +87,7 @@ const demoWorkingHours = {
   sunday: { open: "09:00", close: "22:00", isOpen: true },
 }
 
-const demoStaff = [
+const demoStaff: Staff[] = [
   { id: "1", name: "Demo Kafe Admin", email: "demo@kafe.com", role: "TENANT_ADMIN", isActive: true },
   { id: "2", name: "Ahmet Garson", email: "ahmet@demo-kafe.com", role: "STAFF", isActive: true },
   { id: "3", name: "Ayşe Yönetici", email: "ayse@demo-kafe.com", role: "MANAGER", isActive: true },
@@ -84,25 +126,91 @@ const roleLabels: Record<string, string> = {
 }
 
 export default function SettingsPage() {
+  const { data, isLoading, refetch } = useFetch<SettingsData>(API.tenant.settings)
+  const { mutate, isLoading: isMutating } = useMutation()
+
   const [activeTab, setActiveTab] = useState("general")
-  const [isSaving, setIsSaving] = useState(false)
   const [showSaved, setShowSaved] = useState(false)
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
   // Form states
   const [restaurant, setRestaurant] = useState(demoRestaurant)
   const [workingHours, setWorkingHours] = useState(demoWorkingHours)
   const [aiSettings, setAiSettings] = useState(demoAiSettings)
-  const [staff, setStaff] = useState(demoStaff)
+  const [staff, setStaff] = useState<Staff[]>(demoStaff)
   const [isAddStaffOpen, setIsAddStaffOpen] = useState(false)
   const [themeColor, setThemeColor] = useState("#f97316")
 
+  // Staff form
+  const [staffForm, setStaffForm] = useState({
+    name: "",
+    email: "",
+    password: "",
+    role: "STAFF",
+  })
+
+  // Update form when data loads
+  useEffect(() => {
+    if (data?.restaurant) {
+      setRestaurant(data.restaurant as typeof demoRestaurant)
+    }
+    if (data?.staff) {
+      setStaff(data.staff)
+    }
+  }, [data])
+
   const handleSave = async () => {
-    setIsSaving(true)
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-    setIsSaving(false)
+    await mutate(API.tenant.settings, {
+      method: "PATCH",
+      body: JSON.stringify({
+        name: restaurant.name,
+        description: restaurant.description,
+        phone: restaurant.phone,
+        email: restaurant.email,
+        address: restaurant.address,
+        city: restaurant.city,
+        district: restaurant.district,
+        settings: {
+          workingHours,
+          aiSettings,
+          themeColor,
+        },
+      }),
+    })
     setShowSaved(true)
     setTimeout(() => setShowSaved(false), 3000)
+    await refetch()
+  }
+
+  const handleAddStaff = async (e: React.FormEvent) => {
+    e.preventDefault()
+    await mutate(API.tenant.settings, {
+      method: "POST",
+      body: JSON.stringify({
+        name: staffForm.name,
+        email: staffForm.email,
+        password: staffForm.password,
+        role: staffForm.role,
+      }),
+    })
+    setIsAddStaffOpen(false)
+    setStaffForm({ name: "", email: "", password: "", role: "STAFF" })
+    await refetch()
+  }
+
+  const handleDeleteStaff = async (userId: string) => {
+    if (confirm("Bu personeli silmek istediğinize emin misiniz?")) {
+      await mutate(`${API.tenant.settings}?userId=${userId}`, {
+        method: "DELETE",
+      })
+      await refetch()
+    }
+  }
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true)
+    await refetch()
+    setIsRefreshing(false)
   }
 
   const colors = [
@@ -122,21 +230,33 @@ export default function SettingsPage() {
           <h1 className="text-2xl font-bold">Ayarlar</h1>
           <p className="text-muted-foreground">Restoran ve sistem ayarları</p>
         </div>
-        <Button onClick={handleSave} disabled={isSaving}>
-          {isSaving ? (
-            <>Kaydediliyor...</>
-          ) : showSaved ? (
-            <>
-              <Check className="mr-2 h-4 w-4" />
-              Kaydedildi
-            </>
-          ) : (
-            <>
-              <Save className="mr-2 h-4 w-4" />
-              Kaydet
-            </>
-          )}
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={handleRefresh} disabled={isRefreshing || isLoading}>
+            {isLoading ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
+            )}
+          </Button>
+          <Button onClick={handleSave} disabled={isMutating}>
+            {isMutating ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Kaydediliyor...
+              </>
+            ) : showSaved ? (
+              <>
+                <Check className="mr-2 h-4 w-4" />
+                Kaydedildi
+              </>
+            ) : (
+              <>
+                <Save className="mr-2 h-4 w-4" />
+                Kaydet
+              </>
+            )}
+          </Button>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -190,7 +310,7 @@ export default function SettingsPage() {
               <div>
                 <label className="text-sm font-medium">Açıklama</label>
                 <textarea
-                  value={restaurant.description}
+                  value={restaurant.description || ""}
                   onChange={(e) => setRestaurant({ ...restaurant, description: e.target.value })}
                   rows={3}
                   className="mt-1 w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
@@ -211,7 +331,7 @@ export default function SettingsPage() {
                   <Phone className="h-4 w-4 text-muted-foreground" />
                   <input
                     type="tel"
-                    value={restaurant.phone}
+                    value={restaurant.phone || ""}
                     onChange={(e) => setRestaurant({ ...restaurant, phone: e.target.value })}
                     className="flex-1 rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                   />
@@ -223,7 +343,7 @@ export default function SettingsPage() {
                   <Mail className="h-4 w-4 text-muted-foreground" />
                   <input
                     type="email"
-                    value={restaurant.email}
+                    value={restaurant.email || ""}
                     onChange={(e) => setRestaurant({ ...restaurant, email: e.target.value })}
                     className="flex-1 rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                   />
@@ -235,7 +355,7 @@ export default function SettingsPage() {
                   <MapPin className="h-4 w-4 text-muted-foreground" />
                   <input
                     type="text"
-                    value={restaurant.address}
+                    value={restaurant.address || ""}
                     onChange={(e) => setRestaurant({ ...restaurant, address: e.target.value })}
                     className="flex-1 rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                   />
@@ -246,7 +366,7 @@ export default function SettingsPage() {
                   <label className="text-sm font-medium">İl</label>
                   <input
                     type="text"
-                    value={restaurant.city}
+                    value={restaurant.city || ""}
                     onChange={(e) => setRestaurant({ ...restaurant, city: e.target.value })}
                     className="mt-1 w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                   />
@@ -255,7 +375,7 @@ export default function SettingsPage() {
                   <label className="text-sm font-medium">İlçe</label>
                   <input
                     type="text"
-                    value={restaurant.district}
+                    value={restaurant.district || ""}
                     onChange={(e) => setRestaurant({ ...restaurant, district: e.target.value })}
                     className="mt-1 w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                   />
@@ -480,7 +600,7 @@ export default function SettingsPage() {
           <Card>
             <CardHeader>
               <CardTitle>Öneri Ayarları</CardTitle>
-              <CardDescription>AI'ın müşterilere öneri yapma davranışı</CardDescription>
+              <CardDescription>AI&apos;ın müşterilere öneri yapma davranışı</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between rounded-lg border p-4">
@@ -563,10 +683,16 @@ export default function SettingsPage() {
                           : "bg-gray-100 text-gray-700"
                       }`}
                     >
-                      {roleLabels[member.role]}
+                      {roleLabels[member.role] || member.role}
                     </span>
                     {member.role !== "TENANT_ADMIN" && (
-                      <Button variant="ghost" size="icon" className="text-destructive">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-destructive"
+                        onClick={() => handleDeleteStaff(member.id)}
+                        disabled={isMutating}
+                      >
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     )}
@@ -589,12 +715,14 @@ export default function SettingsPage() {
               </Button>
             </CardHeader>
             <CardContent className="p-6">
-              <form className="space-y-4">
+              <form className="space-y-4" onSubmit={handleAddStaff}>
                 <div>
                   <label className="text-sm font-medium">Ad Soyad *</label>
                   <input
                     type="text"
                     placeholder="Personel adı"
+                    value={staffForm.name}
+                    onChange={(e) => setStaffForm({ ...staffForm, name: e.target.value })}
                     className="mt-1 w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                     required
                   />
@@ -604,6 +732,8 @@ export default function SettingsPage() {
                   <input
                     type="email"
                     placeholder="ornek@email.com"
+                    value={staffForm.email}
+                    onChange={(e) => setStaffForm({ ...staffForm, email: e.target.value })}
                     className="mt-1 w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                     required
                   />
@@ -613,6 +743,8 @@ export default function SettingsPage() {
                   <input
                     type="password"
                     placeholder="••••••••"
+                    value={staffForm.password}
+                    onChange={(e) => setStaffForm({ ...staffForm, password: e.target.value })}
                     className="mt-1 w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                     required
                   />
@@ -620,8 +752,9 @@ export default function SettingsPage() {
                 <div>
                   <label className="text-sm font-medium">Rol *</label>
                   <select
+                    value={staffForm.role}
+                    onChange={(e) => setStaffForm({ ...staffForm, role: e.target.value })}
                     className="mt-1 w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                    defaultValue="STAFF"
                   >
                     <option value="STAFF">Personel (Garson)</option>
                     <option value="MANAGER">Müdür</option>
@@ -631,7 +764,8 @@ export default function SettingsPage() {
                   <Button type="button" variant="outline" className="flex-1" onClick={() => setIsAddStaffOpen(false)}>
                     İptal
                   </Button>
-                  <Button type="submit" className="flex-1">
+                  <Button type="submit" className="flex-1" disabled={isMutating}>
+                    {isMutating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                     Ekle
                   </Button>
                 </div>

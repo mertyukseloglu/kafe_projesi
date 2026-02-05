@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import Link from "next/link"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -15,9 +15,29 @@ import {
   QrCode,
   ArrowRight,
   RefreshCw,
+  Loader2,
 } from "lucide-react"
+import { useFetch, API } from "@/hooks/use-api"
 
-// Demo veriler
+// Tip tanımları
+interface DashboardData {
+  today: { orders: number; revenue: number }
+  pending: number
+  month: { orders: number; revenue: number }
+  customers: number
+  popularItems: { id: string; name: string; price: number; quantity: number }[]
+  recentOrders: {
+    id: string
+    orderNumber: string
+    table: string | null
+    status: string
+    total: number
+    items: { name: string; quantity: number }[]
+    createdAt: string
+  }[]
+}
+
+// Demo veriler (API başarısız olursa fallback)
 const demoStats = {
   activeOrders: 3,
   pendingOrders: 1,
@@ -26,7 +46,7 @@ const demoStats = {
   occupiedTables: 6,
   totalTables: 10,
   monthlyOrders: 342,
-  monthlyLimit: -1, // -1 = sınırsız
+  monthlyLimit: -1,
   revenueChange: 12.5,
 }
 
@@ -34,37 +54,37 @@ const demoOrders = [
   {
     id: "1",
     orderNumber: "S4A2B1",
-    tableNumber: "3",
-    items: ["Latte", "Cheesecake"],
+    table: "3",
+    items: [{ name: "Latte", quantity: 1 }, { name: "Cheesecake", quantity: 1 }],
     total: 150,
     status: "PREPARING",
-    createdAt: new Date(Date.now() - 5 * 60 * 1000),
+    createdAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
   },
   {
     id: "2",
     orderNumber: "S4A2B2",
-    tableNumber: "7",
-    items: ["Türk Kahvesi x2", "Brownie"],
+    table: "7",
+    items: [{ name: "Türk Kahvesi", quantity: 2 }, { name: "Brownie", quantity: 1 }],
     total: 165,
     status: "PENDING",
-    createdAt: new Date(Date.now() - 2 * 60 * 1000),
+    createdAt: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
   },
   {
     id: "3",
     orderNumber: "S4A2B3",
-    tableNumber: "1",
-    items: ["Cappuccino", "Sandviç"],
+    table: "1",
+    items: [{ name: "Cappuccino", quantity: 1 }, { name: "Sandviç", quantity: 1 }],
     total: 155,
     status: "READY",
-    createdAt: new Date(Date.now() - 12 * 60 * 1000),
+    createdAt: new Date(Date.now() - 12 * 60 * 1000).toISOString(),
   },
 ]
 
 const demoPopularItems = [
-  { name: "Latte", count: 45, revenue: 2925 },
-  { name: "Türk Kahvesi", count: 38, revenue: 1710 },
-  { name: "Cheesecake", count: 24, revenue: 2040 },
-  { name: "Cappuccino", count: 22, revenue: 1320 },
+  { id: "1", name: "Latte", quantity: 45, price: 65 },
+  { id: "2", name: "Türk Kahvesi", quantity: 38, price: 45 },
+  { id: "3", name: "Cheesecake", quantity: 24, price: 85 },
+  { id: "4", name: "Cappuccino", quantity: 22, price: 60 },
 ]
 
 const statusConfig: Record<string, { label: string; color: string; icon: React.ElementType }> = {
@@ -82,12 +102,31 @@ function formatTimeAgo(date: Date) {
 }
 
 export default function TenantDashboard() {
+  const { data, isLoading, refetch } = useFetch<DashboardData>(API.tenant.dashboard)
   const [isRefreshing, setIsRefreshing] = useState(false)
 
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
     setIsRefreshing(true)
-    setTimeout(() => setIsRefreshing(false), 1000)
+    await refetch()
+    setIsRefreshing(false)
   }
+
+  // Use API data or fallback to demo
+  const stats = {
+    activeOrders: data?.pending || demoStats.activeOrders,
+    pendingOrders: data?.recentOrders?.filter(o => o.status === "PENDING").length || demoStats.pendingOrders,
+    todayRevenue: data?.today?.revenue || demoStats.todayRevenue,
+    todayOrders: data?.today?.orders || demoStats.todayOrders,
+    monthlyOrders: data?.month?.orders || demoStats.monthlyOrders,
+    monthlyLimit: -1,
+    revenueChange: 12.5, // TODO: Calculate from API
+  }
+
+  const orders = data?.recentOrders?.filter(o =>
+    ["PENDING", "CONFIRMED", "PREPARING", "READY"].includes(o.status)
+  ) || demoOrders
+
+  const popularItems = data?.popularItems || demoPopularItems
 
   return (
     <div className="space-y-6">
@@ -97,9 +136,13 @@ export default function TenantDashboard() {
           <h1 className="text-2xl font-bold sm:text-3xl">Dashboard</h1>
           <p className="text-muted-foreground">Bugünün özeti ve canlı veriler</p>
         </div>
-        <Button variant="outline" onClick={handleRefresh} disabled={isRefreshing}>
-          <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
-          Yenile
+        <Button variant="outline" onClick={handleRefresh} disabled={isRefreshing || isLoading}>
+          {isLoading ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
+          )}
+          {isLoading ? "Yükleniyor..." : "Yenile"}
         </Button>
       </div>
 
@@ -111,9 +154,9 @@ export default function TenantDashboard() {
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{demoStats.activeOrders}</div>
+            <div className="text-3xl font-bold">{stats.activeOrders}</div>
             <p className="text-xs text-muted-foreground">
-              <span className="text-yellow-600">{demoStats.pendingOrders} bekliyor</span>
+              <span className="text-yellow-600">{stats.pendingOrders} bekliyor</span>
             </p>
           </CardContent>
         </Card>
@@ -121,17 +164,17 @@ export default function TenantDashboard() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardDescription>Bugünün Cirosu</CardDescription>
-            {demoStats.revenueChange >= 0 ? (
+            {stats.revenueChange >= 0 ? (
               <TrendingUp className="h-4 w-4 text-green-500" />
             ) : (
               <TrendingDown className="h-4 w-4 text-red-500" />
             )}
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">₺{demoStats.todayRevenue.toLocaleString("tr-TR")}</div>
+            <div className="text-3xl font-bold">₺{stats.todayRevenue.toLocaleString("tr-TR")}</div>
             <p className="text-xs text-muted-foreground">
-              <span className={demoStats.revenueChange >= 0 ? "text-green-600" : "text-red-600"}>
-                {demoStats.revenueChange >= 0 ? "+" : ""}{demoStats.revenueChange}%
+              <span className={stats.revenueChange >= 0 ? "text-green-600" : "text-red-600"}>
+                {stats.revenueChange >= 0 ? "+" : ""}{stats.revenueChange}%
               </span>{" "}
               düne göre
             </p>
@@ -140,17 +183,15 @@ export default function TenantDashboard() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardDescription>Dolu Masalar</CardDescription>
+            <CardDescription>Bugünün Siparişi</CardDescription>
             <div className="flex h-4 w-4 items-center justify-center rounded-full bg-green-100">
               <div className="h-2 w-2 rounded-full bg-green-500" />
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">
-              {demoStats.occupiedTables}/{demoStats.totalTables}
-            </div>
+            <div className="text-3xl font-bold">{stats.todayOrders}</div>
             <p className="text-xs text-muted-foreground">
-              Doluluk: %{Math.round((demoStats.occupiedTables / demoStats.totalTables) * 100)}
+              Toplam sipariş adedi
             </p>
           </CardContent>
         </Card>
@@ -161,9 +202,9 @@ export default function TenantDashboard() {
             <Package className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{demoStats.monthlyOrders}</div>
+            <div className="text-3xl font-bold">{stats.monthlyOrders}</div>
             <p className="text-xs text-muted-foreground">
-              Kalan limit: {demoStats.monthlyLimit === -1 ? "∞" : demoStats.monthlyLimit - demoStats.monthlyOrders}
+              Kalan limit: {stats.monthlyLimit === -1 ? "∞" : stats.monthlyLimit - stats.monthlyOrders}
             </p>
           </CardContent>
         </Card>
@@ -184,15 +225,18 @@ export default function TenantDashboard() {
           </Link>
         </CardHeader>
         <CardContent>
-          {demoOrders.length === 0 ? (
+          {orders.length === 0 ? (
             <p className="py-8 text-center text-muted-foreground">
               Henüz aktif sipariş yok. Müşteriler QR kod tarayarak sipariş verebilir.
             </p>
           ) : (
             <div className="space-y-3">
-              {demoOrders.map((order) => {
-                const status = statusConfig[order.status]
+              {orders.slice(0, 5).map((order) => {
+                const status = statusConfig[order.status] || statusConfig.PENDING
                 const StatusIcon = status.icon
+                const itemsText = order.items.map(i =>
+                  i.quantity > 1 ? `${i.name} x${i.quantity}` : i.name
+                ).join(", ")
                 return (
                   <div
                     key={order.id}
@@ -200,7 +244,7 @@ export default function TenantDashboard() {
                   >
                     <div className="flex items-center gap-4">
                       <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted font-medium">
-                        {order.tableNumber}
+                        {order.table || "-"}
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
@@ -210,14 +254,14 @@ export default function TenantDashboard() {
                             {status.label}
                           </span>
                         </div>
-                        <p className="text-sm text-muted-foreground">
-                          {order.items.join(", ")}
+                        <p className="text-sm text-muted-foreground line-clamp-1">
+                          {itemsText}
                         </p>
                       </div>
                     </div>
                     <div className="text-right">
                       <p className="font-medium">₺{order.total}</p>
-                      <p className="text-xs text-muted-foreground">{formatTimeAgo(order.createdAt)}</p>
+                      <p className="text-xs text-muted-foreground">{formatTimeAgo(new Date(order.createdAt))}</p>
                     </div>
                   </div>
                 )
@@ -237,8 +281,8 @@ export default function TenantDashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {demoPopularItems.map((item, index) => (
-                <div key={item.name} className="flex items-center justify-between">
+              {popularItems.map((item, index) => (
+                <div key={item.id} className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <span className="flex h-6 w-6 items-center justify-center rounded-full bg-muted text-xs font-medium">
                       {index + 1}
@@ -246,8 +290,8 @@ export default function TenantDashboard() {
                     <span className="font-medium">{item.name}</span>
                   </div>
                   <div className="text-right">
-                    <p className="font-medium">₺{item.revenue.toLocaleString("tr-TR")}</p>
-                    <p className="text-xs text-muted-foreground">{item.count} adet</p>
+                    <p className="font-medium">₺{(item.price * item.quantity).toLocaleString("tr-TR")}</p>
+                    <p className="text-xs text-muted-foreground">{item.quantity} adet</p>
                   </div>
                 </div>
               ))}

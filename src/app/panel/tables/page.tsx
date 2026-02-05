@@ -1,13 +1,12 @@
 "use client"
 
-import { useState } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { useState, useMemo } from "react"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import {
   Plus,
   QrCode,
   Download,
-  Printer,
   Edit,
   Trash2,
   Users,
@@ -15,10 +14,33 @@ import {
   Grid3X3,
   LayoutGrid,
   List,
+  RefreshCw,
+  Loader2,
 } from "lucide-react"
+import { useFetch, useMutation, API } from "@/hooks/use-api"
+
+// Tip tanımları
+interface Table {
+  id: string
+  number: string
+  area?: string
+  capacity: number
+  isActive: boolean
+  qrCodeUrl?: string
+  hasActiveOrder?: boolean
+}
+
+interface TablesData {
+  tables: Table[]
+  stats?: {
+    total: number
+    occupied: number
+    available: number
+  }
+}
 
 // Demo masalar
-const demoTables = [
+const demoTables: Table[] = [
   { id: "1", number: "1", area: "İç Mekan", capacity: 2, isActive: true, hasActiveOrder: true },
   { id: "2", number: "2", area: "İç Mekan", capacity: 4, isActive: true, hasActiveOrder: false },
   { id: "3", number: "3", area: "İç Mekan", capacity: 4, isActive: true, hasActiveOrder: true },
@@ -31,31 +53,52 @@ const demoTables = [
   { id: "10", number: "10", area: "Teras", capacity: 4, isActive: false, hasActiveOrder: false },
 ]
 
-const areas = ["Tümü", "İç Mekan", "Bahçe", "Teras"]
+const defaultAreas = ["Tümü", "İç Mekan", "Bahçe", "Teras"]
 
 export default function TablesPage() {
-  const [tables, setTables] = useState(demoTables)
+  const { data, isLoading, refetch } = useFetch<TablesData>(API.tenant.tables)
+  const { mutate, isLoading: isMutating } = useMutation()
+
   const [selectedArea, setSelectedArea] = useState("Tümü")
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
   const [showAddModal, setShowAddModal] = useState(false)
-  const [editTable, setEditTable] = useState<typeof demoTables[0] | null>(null)
+  const [editTable, setEditTable] = useState<Table | null>(null)
   const [selectedTables, setSelectedTables] = useState<string[]>([])
+  const [isRefreshing, setIsRefreshing] = useState(false)
+
+  // Form state
+  const [formData, setFormData] = useState({
+    number: "",
+    area: "",
+    capacity: 4,
+  })
+
+  // Use API data or fallback to demo
+  const tables = data?.tables || demoTables
 
   // Demo restoran slug
   const restaurantSlug = "demo-kafe"
 
+  // Get unique areas from tables
+  const areas = useMemo((): string[] => {
+    const uniqueAreas = tables.map(t => t.area).filter((a): a is string => Boolean(a))
+    return ["Tümü", ...Array.from(new Set(uniqueAreas))]
+  }, [tables])
+
   // Filtreleme
-  const filteredTables = tables.filter(table => {
-    if (selectedArea !== "Tümü" && table.area !== selectedArea) return false
-    return true
-  })
+  const filteredTables = useMemo(() => {
+    return tables.filter(table => {
+      if (selectedArea !== "Tümü" && table.area !== selectedArea) return false
+      return true
+    })
+  }, [tables, selectedArea])
 
   // İstatistikler
-  const stats = {
+  const stats = useMemo(() => ({
     total: tables.filter(t => t.isActive).length,
     occupied: tables.filter(t => t.isActive && t.hasActiveOrder).length,
     available: tables.filter(t => t.isActive && !t.hasActiveOrder).length,
-  }
+  }), [tables])
 
   // QR URL oluştur
   const getQRUrl = (tableNumber: string) => {
@@ -84,15 +127,68 @@ export default function TablesPage() {
   // Tek QR indir
   const downloadQR = (tableNumber: string) => {
     const url = getQRUrl(tableNumber)
-    // Gerçek uygulamada QR kod görseli oluşturulup indirilir
     alert(`Masa ${tableNumber} QR kodu indiriliyor...\n\nURL: ${url}`)
   }
 
   // Masa sil
-  const deleteTable = (tableId: string) => {
+  const deleteTable = async (tableId: string) => {
     if (confirm("Bu masayı silmek istediğinize emin misiniz?")) {
-      setTables(prev => prev.filter(t => t.id !== tableId))
+      await mutate(`${API.tenant.tables}?id=${tableId}`, {
+        method: "DELETE",
+      })
+      await refetch()
     }
+  }
+
+  // Masa ekle
+  const handleAddTable = async (e: React.FormEvent) => {
+    e.preventDefault()
+    await mutate(API.tenant.tables, {
+      method: "POST",
+      body: JSON.stringify({
+        number: formData.number,
+        area: formData.area,
+        capacity: formData.capacity,
+      }),
+    })
+    setShowAddModal(false)
+    setFormData({ number: "", area: "", capacity: 4 })
+    await refetch()
+  }
+
+  // Masa güncelle
+  const handleUpdateTable = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editTable) return
+    await mutate(API.tenant.tables, {
+      method: "PATCH",
+      body: JSON.stringify({
+        id: editTable.id,
+        number: formData.number,
+        area: formData.area,
+        capacity: formData.capacity,
+      }),
+    })
+    setEditTable(null)
+    setFormData({ number: "", area: "", capacity: 4 })
+    await refetch()
+  }
+
+  // Edit modal aç
+  const openEditModal = (table: Table) => {
+    setEditTable(table)
+    setFormData({
+      number: table.number,
+      area: table.area || "",
+      capacity: table.capacity,
+    })
+  }
+
+  // Yenile
+  const handleRefresh = async () => {
+    setIsRefreshing(true)
+    await refetch()
+    setIsRefreshing(false)
   }
 
   return (
@@ -104,6 +200,13 @@ export default function TablesPage() {
           <p className="text-muted-foreground">Masaları düzenle ve QR kodları yönet</p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={handleRefresh} disabled={isRefreshing || isLoading}>
+            {isLoading ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
+            )}
+          </Button>
           {selectedTables.length > 0 && (
             <Button variant="outline" onClick={downloadSelectedQR}>
               <Download className="mr-2 h-4 w-4" />
@@ -153,7 +256,7 @@ export default function TablesPage() {
       {/* Filters */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex gap-2 overflow-x-auto">
-          {areas.map((area) => (
+          {(areas.length > 0 ? areas : defaultAreas).map((area) => (
             <Button
               key={area}
               variant={selectedArea === area ? "default" : "outline"}
@@ -236,7 +339,7 @@ export default function TablesPage() {
                     variant="outline"
                     size="icon"
                     className="h-8 w-8"
-                    onClick={() => setEditTable(table)}
+                    onClick={() => openEditModal(table)}
                   >
                     <Edit className="h-3 w-3" />
                   </Button>
@@ -301,7 +404,7 @@ export default function TablesPage() {
                         <Button variant="ghost" size="sm" onClick={() => downloadQR(table.number)}>
                           <QrCode className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="sm" onClick={() => setEditTable(table)}>
+                        <Button variant="ghost" size="sm" onClick={() => openEditModal(table)}>
                           <Edit className="h-4 w-4" />
                         </Button>
                         <Button variant="ghost" size="sm" asChild>
@@ -314,6 +417,7 @@ export default function TablesPage() {
                           size="sm"
                           className="text-destructive"
                           onClick={() => deleteTable(table.id)}
+                          disabled={isMutating}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -344,21 +448,24 @@ export default function TablesPage() {
                 {editTable ? "Masa Düzenle" : "Yeni Masa Ekle"}
               </h2>
 
-              <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); setShowAddModal(false); setEditTable(null); }}>
+              <form className="space-y-4" onSubmit={editTable ? handleUpdateTable : handleAddTable}>
                 <div>
                   <label className="mb-1 block text-sm font-medium">Masa Numarası</label>
                   <input
                     type="text"
-                    defaultValue={editTable?.number || ""}
+                    value={formData.number}
+                    onChange={(e) => setFormData({ ...formData, number: e.target.value })}
                     className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                     placeholder="örn: 11"
+                    required
                   />
                 </div>
 
                 <div>
                   <label className="mb-1 block text-sm font-medium">Alan</label>
                   <select
-                    defaultValue={editTable?.area || ""}
+                    value={formData.area}
+                    onChange={(e) => setFormData({ ...formData, area: e.target.value })}
                     className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                   >
                     <option value="">Seçin...</option>
@@ -372,7 +479,8 @@ export default function TablesPage() {
                   <label className="mb-1 block text-sm font-medium">Kapasite</label>
                   <input
                     type="number"
-                    defaultValue={editTable?.capacity || 4}
+                    value={formData.capacity}
+                    onChange={(e) => setFormData({ ...formData, capacity: parseInt(e.target.value) || 4 })}
                     min={1}
                     max={20}
                     className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
@@ -388,7 +496,8 @@ export default function TablesPage() {
                   >
                     İptal
                   </Button>
-                  <Button type="submit" className="flex-1">
+                  <Button type="submit" className="flex-1" disabled={isMutating}>
+                    {isMutating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                     {editTable ? "Güncelle" : "Ekle"}
                   </Button>
                 </div>

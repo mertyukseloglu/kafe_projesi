@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { useState, useMemo } from "react"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import {
   Clock,
@@ -10,18 +10,46 @@ import {
   Package,
   XCircle,
   Truck,
-  Filter,
   Search,
-  MoreVertical,
-  Phone,
+  RefreshCw,
+  Loader2,
 } from "lucide-react"
+import { useFetch, useMutation, API } from "@/hooks/use-api"
 
-// Demo siparişler
-const demoOrders = [
+// Tip tanımları
+interface OrderItem {
+  name: string
+  quantity: number
+  price: number
+}
+
+interface Order {
+  id: string
+  orderNumber: string
+  table: string | null
+  items: OrderItem[]
+  total: number
+  status: string
+  notes?: string
+  createdAt: string
+}
+
+interface OrdersData {
+  orders: Order[]
+  total: number
+  stats?: {
+    pending: number
+    preparing: number
+    ready: number
+  }
+}
+
+// Demo siparişler (API başarısız olursa fallback)
+const demoOrders: Order[] = [
   {
     id: "1",
     orderNumber: "S4A2B1",
-    tableNumber: "3",
+    table: "3",
     items: [
       { name: "Latte", quantity: 1, price: 65 },
       { name: "Cheesecake", quantity: 1, price: 85 },
@@ -29,43 +57,43 @@ const demoOrders = [
     total: 150,
     status: "PREPARING",
     notes: "Şeker az olsun",
-    createdAt: new Date(Date.now() - 5 * 60 * 1000),
+    createdAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
   },
   {
     id: "2",
     orderNumber: "S4A2B2",
-    tableNumber: "7",
+    table: "7",
     items: [
       { name: "Türk Kahvesi", quantity: 2, price: 90 },
       { name: "Brownie", quantity: 1, price: 75 },
     ],
     total: 165,
     status: "PENDING",
-    createdAt: new Date(Date.now() - 2 * 60 * 1000),
+    createdAt: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
   },
   {
     id: "3",
     orderNumber: "S4A2B3",
-    tableNumber: "1",
+    table: "1",
     items: [
       { name: "Cappuccino", quantity: 1, price: 60 },
       { name: "Sandviç", quantity: 1, price: 95 },
     ],
     total: 155,
     status: "READY",
-    createdAt: new Date(Date.now() - 12 * 60 * 1000),
+    createdAt: new Date(Date.now() - 12 * 60 * 1000).toISOString(),
   },
   {
     id: "4",
     orderNumber: "S4A2B0",
-    tableNumber: "5",
+    table: "5",
     items: [
       { name: "Ice Latte", quantity: 2, price: 140 },
       { name: "Tiramisu", quantity: 1, price: 90 },
     ],
     total: 230,
     status: "DELIVERED",
-    createdAt: new Date(Date.now() - 45 * 60 * 1000),
+    createdAt: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
   },
 ]
 
@@ -134,7 +162,8 @@ const filterOptions: { value: string; label: string }[] = [
   { value: "DELIVERED", label: "Teslim Edilmiş" },
 ]
 
-function formatTimeAgo(date: Date) {
+function formatTimeAgo(dateStr: string) {
+  const date = new Date(dateStr)
   const diff = Math.floor((Date.now() - date.getTime()) / 1000 / 60)
   if (diff < 1) return "Az önce"
   if (diff < 60) return `${diff} dk önce`
@@ -142,43 +171,60 @@ function formatTimeAgo(date: Date) {
 }
 
 export default function OrdersPage() {
-  const [orders, setOrders] = useState(demoOrders)
+  const { data, isLoading, refetch } = useFetch<OrdersData>(API.tenant.orders)
+  const { mutate: updateStatus, isLoading: isUpdating } = useMutation<{ id: string; status: string }>()
+
   const [filter, setFilter] = useState("active")
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedOrder, setSelectedOrder] = useState<string | null>(null)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+
+  // Use API data or fallback to demo
+  const orders = data?.orders || demoOrders
 
   // Filtreleme
-  const filteredOrders = orders.filter(order => {
-    // Arama filtresi
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase()
-      if (!order.orderNumber.toLowerCase().includes(query) &&
-          !order.tableNumber.includes(query)) {
-        return false
+  const filteredOrders = useMemo(() => {
+    return orders.filter(order => {
+      // Arama filtresi
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase()
+        if (!order.orderNumber.toLowerCase().includes(query) &&
+            !order.table?.includes(query)) {
+          return false
+        }
       }
-    }
 
-    // Durum filtresi
-    if (filter === "all") return true
-    if (filter === "active") {
-      return ["PENDING", "CONFIRMED", "PREPARING", "READY"].includes(order.status)
-    }
-    return order.status === filter
-  })
+      // Durum filtresi
+      if (filter === "all") return true
+      if (filter === "active") {
+        return ["PENDING", "CONFIRMED", "PREPARING", "READY"].includes(order.status)
+      }
+      return order.status === filter
+    })
+  }, [orders, searchQuery, filter])
 
   // Sipariş durumu güncelle
-  const updateOrderStatus = (orderId: string, newStatus: OrderStatus) => {
-    setOrders(prev => prev.map(order =>
-      order.id === orderId ? { ...order, status: newStatus } : order
-    ))
+  const updateOrderStatus = async (orderId: string, newStatus: OrderStatus) => {
+    await updateStatus(API.tenant.orders, {
+      method: "PATCH",
+      body: JSON.stringify({ id: orderId, status: newStatus }),
+    })
+    await refetch()
+  }
+
+  // Yenile
+  const handleRefresh = async () => {
+    setIsRefreshing(true)
+    await refetch()
+    setIsRefreshing(false)
   }
 
   // İstatistikler
-  const stats = {
+  const stats = useMemo(() => ({
     pending: orders.filter(o => o.status === "PENDING").length,
     preparing: orders.filter(o => o.status === "PREPARING").length,
     ready: orders.filter(o => o.status === "READY").length,
-  }
+  }), [orders])
 
   return (
     <div className="space-y-6">
@@ -188,6 +234,14 @@ export default function OrdersPage() {
           <h1 className="text-2xl font-bold sm:text-3xl">Siparişler</h1>
           <p className="text-muted-foreground">Sipariş yönetimi ve takibi</p>
         </div>
+        <Button variant="outline" onClick={handleRefresh} disabled={isRefreshing || isLoading}>
+          {isLoading ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
+          )}
+          {isLoading ? "Yükleniyor..." : "Yenile"}
+        </Button>
       </div>
 
       {/* Quick Stats */}
@@ -277,7 +331,7 @@ export default function OrdersPage() {
                   >
                     <div className="flex items-center gap-4">
                       <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted text-lg font-bold">
-                        {order.tableNumber}
+                        {order.table || "-"}
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
@@ -288,7 +342,7 @@ export default function OrdersPage() {
                           </span>
                         </div>
                         <p className="text-sm text-muted-foreground">
-                          Masa {order.tableNumber} • {formatTimeAgo(order.createdAt)}
+                          Masa {order.table || "-"} • {formatTimeAgo(order.createdAt)}
                         </p>
                       </div>
                     </div>
@@ -327,7 +381,9 @@ export default function OrdersPage() {
                           <Button
                             onClick={() => updateOrderStatus(order.id, status.nextStatus!)}
                             className="flex-1"
+                            disabled={isUpdating}
                           >
+                            {isUpdating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                             {status.nextLabel}
                           </Button>
                         )}
@@ -335,6 +391,7 @@ export default function OrdersPage() {
                           <Button
                             variant="destructive"
                             onClick={() => updateOrderStatus(order.id, "CANCELLED")}
+                            disabled={isUpdating}
                           >
                             <XCircle className="mr-2 h-4 w-4" />
                             İptal
