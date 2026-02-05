@@ -123,8 +123,9 @@ function LoginForm() {
           <div className="mt-6 rounded-lg border bg-muted/50 p-4">
             <p className="mb-2 text-sm font-medium">Demo Hesaplar:</p>
             <div className="space-y-1 text-xs text-muted-foreground">
-              <p><strong>Super Admin:</strong> admin@platform.com / admin123</p>
-              <p><strong>Restoran:</strong> demo@kafe.com / demo123</p>
+              <p><strong>Super Admin:</strong> admin@restoai.com / admin123</p>
+              <p><strong>Restoran:</strong> demo@demo-kafe.com / demo123</p>
+              <p><strong>Personel:</strong> staff@demo-kafe.com / staff123</p>
             </div>
           </div>
         </CardContent>
