@@ -4,19 +4,62 @@
 Multi-tenant SaaS restoran/kafe dijital menü ve sipariş yönetim platformu.
 
 ## Tech Stack
-- **Framework:** Next.js 14 (App Router)
+- **Framework:** Next.js 16 (App Router)
 - **UI:** Tailwind CSS + shadcn/ui
 - **Database:** PostgreSQL + Prisma ORM
-- **Auth:** NextAuth.js v5 (henüz eklenmedi)
+- **Auth:** NextAuth.js v5
 - **AI:** Claude API (Anthropic)
-- **Real-time:** Pusher (henüz eklenmedi)
+- **Real-time:** Pusher (planlandı)
 - **Dil:** TypeScript (strict mode)
+- **Geliştirme:** Claude Code
+
+## Claude Code ile Geliştirme
+
+### Kurulum ve Başlangıç
+```bash
+# Proje klasörüne git
+cd /home/user/kafe_projesi
+
+# Claude Code'u başlat
+claude
+
+# Veya direkt komutla
+claude "npm run dev başlat"
+```
+
+### Sık Kullanılan Komutlar
+```bash
+# Geliştirme sunucusunu başlat
+claude "npm run dev"
+
+# Build ve hata kontrolü
+claude "npm run build"
+
+# Yeni özellik ekle
+claude "Sipariş sayfasına filtreleme özelliği ekle"
+
+# Hata düzelt
+claude "Login sayfası 404 veriyor, düzelt"
+
+# Git işlemleri
+claude "Değişiklikleri commit et ve push yap"
+```
+
+### İpuçları
+- Claude Code proje bağlamını otomatik anlıyor (CLAUDE.md dosyası sayesinde)
+- Türkçe veya İngilizce komut verebilirsin
+- Birden fazla dosya değişikliği tek seferde yapılabiliyor
+- Hatalar otomatik düzeltiliyor
 
 ## Klasör Yapısı
 
 ```
 src/
 ├── app/
+│   ├── (auth)/            # Auth sayfaları (route group)
+│   │   ├── login/         # /login
+│   │   └── register/      # /register
+│   │
 │   ├── admin/             # Platform yönetici paneli (/admin/*)
 │   │   ├── dashboard/     # /admin/dashboard
 │   │   ├── restaurants/   # /admin/restaurants
@@ -36,6 +79,8 @@ src/
 │   ├── customer/          # Müşteri arayüzü
 │   │   └── menu/[slug]/   # /customer/menu/[restoran-slug]?table=1
 │   │
+│   ├── sitemap-test/      # Test sayfası
+│   │
 │   └── api/               # API Routes
 │       ├── auth/          # Authentication
 │       ├── admin/         # Super Admin API'leri
@@ -45,15 +90,17 @@ src/
 ├── components/
 │   ├── ui/                # shadcn/ui bileşenleri
 │   ├── layouts/           # Layout bileşenleri
-│   ├── shared/            # Paylaşımlı bileşenler
-│   └── forms/             # Form bileşenleri
+│   └── shared/            # Paylaşımlı bileşenler
 │
 ├── lib/
 │   ├── prisma.ts          # Prisma client singleton
+│   ├── auth.ts            # NextAuth.js yapılandırması
 │   ├── utils.ts           # Utility fonksiyonlar
 │   └── validations/       # Zod şemaları
 │
 ├── hooks/                 # Custom React hooks
+│   └── use-api.ts         # API fetch/mutation hooks
+│
 └── types/                 # TypeScript tip tanımları
 ```
 
@@ -96,7 +143,7 @@ const orders = await prisma.order.findMany()
 - shadcn/ui tema renklerini kullan (primary, secondary, muted, vb.)
 
 ### 6. Form Validasyonu
-- Zod şemaları kullan
+- Zod şemaları kullan (v4)
 - Client ve server'da aynı şemayı kullan
 - Hata mesajları Türkçe olsun
 
@@ -110,40 +157,55 @@ Ana modeller (detay için `prisma/schema.prisma`):
 - **Table:** Masalar ve QR kodları
 - **Order:** Siparişler
 - **Customer:** Müşteriler (sadakat programı dahil)
-- **Subscription:** Abonelik bilgileri
+- **SubscriptionPlan:** Abonelik planları
+- **Subscription:** Aktif abonelikler
 - **Payment:** Ödeme kayıtları
 
-## Yapılacaklar (Sonraki Fazlar)
+## Tamamlanan Fazlar
 
-### FAZ 2: Auth Sistemi
-- [ ] NextAuth.js v5 kurulumu
-- [ ] Credentials provider (email/password)
-- [ ] Role-based middleware
-- [ ] Session'da tenant bilgisi
+### ✅ FAZ 1-5: Temel Altyapı
+- Next.js 16 + TypeScript kurulumu
+- Prisma schema ve modeller
+- shadcn/ui bileşenleri
+- Temel sayfa yapıları
 
-### FAZ 3: Super Admin Paneli
-- [ ] Restoran CRUD
-- [ ] Abonelik yönetimi
-- [ ] Ödeme entegrasyonu hazırlığı
+### ✅ FAZ 6: Auth Sistemi
+- NextAuth.js v5 kurulumu
+- Credentials provider (email/password)
+- Role-based erişim kontrolü
+- Session'da tenant bilgisi
 
-### FAZ 4: Tenant Paneli
-- [ ] Menü yönetimi (CRUD)
-- [ ] Masa ve QR oluşturma
-- [ ] Canlı sipariş ekranı
-- [ ] Real-time bildirimler
+### ✅ FAZ 7: Tenant API'leri
+- Dashboard, Orders, Menu, Tables, Customers, Settings API'leri
+- Demo data fallback
 
-### FAZ 5: Müşteri Arayüzü
-- [ ] QR menü görüntüleme
-- [ ] AI chatbot entegrasyonu
-- [ ] Sipariş verme akışı
+### ✅ FAZ 8: Panel Entegrasyonu
+- Tüm panel sayfaları API'lere bağlandı
+- useFetch/useMutation hooks
+- Landing page tasarımı
+
+### ✅ FAZ 9: Admin API'leri
+- Dashboard, Restaurants, Subscriptions, Payments, Settings API'leri
+- SUPER_ADMIN yetkilendirmesi
+
+## Sonraki Adımlar
+
+### Planlandı
+- [ ] Real-time bildirimler (Pusher)
+- [ ] Email bildirimleri
+- [ ] Ödeme entegrasyonu (iyzico)
+- [ ] Raporların API entegrasyonu
+- [ ] Admin panel sayfalarının API entegrasyonu
 
 ## Ortam Değişkenleri
 
-`.env` dosyasında gerekli değişkenler (`.env.example`'a bak):
-- `DATABASE_URL` - PostgreSQL bağlantısı
-- `NEXTAUTH_SECRET` - Auth secret key
-- `ANTHROPIC_API_KEY` - Claude AI API key
-- `PUSHER_*` - Real-time bildirimler için
+`.env` dosyasında gerekli değişkenler:
+```env
+DATABASE_URL="postgresql://user:pass@localhost:5432/restaurant_db"
+NEXTAUTH_SECRET="your-secret-key"
+NEXTAUTH_URL="http://localhost:3000"
+ANTHROPIC_API_KEY="your-claude-api-key"
+```
 
 ## Komutlar
 
@@ -162,11 +224,29 @@ npx prisma studio      # DB GUI
 
 # Lint
 npm run lint
+
+# Cache temizle (404 hatalarında)
+rm -rf .next && npm run dev
 ```
+
+## Test Sayfaları
+
+Geliştirme sırasında test için:
+- `/sitemap-test` - Tüm sayfalar ve API endpointleri listesi
+- `/customer/menu/demo-kafe?table=5` - Müşteri menü önizleme
+
+## Test Kullanıcıları
+
+| Rol | Email | Şifre |
+|-----|-------|-------|
+| Super Admin | admin@restoai.com | admin123 |
+| Restoran Admin | demo@demo-kafe.com | demo123 |
+| Personel | staff@demo-kafe.com | staff123 |
 
 ## Notlar
 
 - UI dili: Türkçe
 - Para birimi: TL (₺)
 - AI Provider: Claude (Anthropic)
-- Ödeme gateway: Sonra eklenecek (iyzico veya alternatif)
+- Ödeme gateway: Planlandı (iyzico)
+- Tüm sayfalar demo data ile çalışıyor (veritabanı olmadan test edilebilir)
