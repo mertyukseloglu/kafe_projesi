@@ -18,7 +18,15 @@ import {
   Clock,
   ChevronRight,
   Sparkles,
+  Heart,
+  ShieldAlert,
+  AlertTriangle,
+  History,
+  RotateCcw,
 } from "lucide-react"
+import { LanguageSelector } from "@/components/customer/LanguageSelector"
+import { ThemeToggle } from "@/components/customer/ThemeToggle"
+import { Locale, t, defaultLocale } from "@/lib/i18n"
 
 // Tip tanımları
 interface Variation {
@@ -32,6 +40,20 @@ interface Extra {
   price: number
 }
 
+// Alerjen türleri
+type AllergenType = "gluten" | "dairy" | "nuts" | "eggs" | "soy" | "shellfish" | "fish" | "peanuts"
+
+const allergenInfo: Record<AllergenType, { name: string; icon: string; nameEn: string }> = {
+  gluten: { name: "Gluten", icon: "🌾", nameEn: "Gluten" },
+  dairy: { name: "Süt Ürünleri", icon: "🥛", nameEn: "Dairy" },
+  nuts: { name: "Kuruyemiş", icon: "🥜", nameEn: "Nuts" },
+  eggs: { name: "Yumurta", icon: "🥚", nameEn: "Eggs" },
+  soy: { name: "Soya", icon: "🫘", nameEn: "Soy" },
+  shellfish: { name: "Kabuklu Deniz", icon: "🦐", nameEn: "Shellfish" },
+  fish: { name: "Balık", icon: "🐟", nameEn: "Fish" },
+  peanuts: { name: "Fıstık", icon: "🥜", nameEn: "Peanuts" },
+}
+
 interface MenuItem {
   id: string
   name: string
@@ -42,6 +64,7 @@ interface MenuItem {
   tags?: string[]
   variations?: Variation[]
   extras?: Extra[]
+  allergens?: AllergenType[]
 }
 
 interface SelectedVariation {
@@ -74,6 +97,14 @@ interface ChatMessage {
   content: string
 }
 
+interface OrderHistoryItem {
+  id: string
+  date: string
+  items: CartItem[]
+  total: number
+  tableNumber?: string
+}
+
 // Demo veriler (gerçek projede API'den gelecek)
 const demoCategories: Category[] = [
   { id: "all", name: "Tümü" },
@@ -81,6 +112,51 @@ const demoCategories: Category[] = [
   { id: "soguk-icecekler", name: "Soğuk İçecekler" },
   { id: "tatlilar", name: "Tatlılar" },
   { id: "atistirmaliklar", name: "Atıştırmalıklar" },
+]
+
+// Demo kampanyalar
+interface Campaign {
+  id: string
+  name: string
+  description: string
+  type: "DISCOUNT_PERCENT" | "DISCOUNT_AMOUNT" | "BUY_X_GET_Y"
+  discountValue: number
+  bgColor: string
+  textColor: string
+  couponCode?: string
+}
+
+const demoCampaigns: Campaign[] = [
+  {
+    id: "1",
+    name: "Hoşgeldin İndirimi",
+    description: "İlk siparişinize özel %15 indirim",
+    type: "DISCOUNT_PERCENT",
+    discountValue: 15,
+    bgColor: "from-orange-500 to-red-500",
+    textColor: "text-white",
+    couponCode: "HOSGELDIN",
+  },
+  {
+    id: "2",
+    name: "Kahve Günü",
+    description: "Tüm kahvelerde %10 indirim",
+    type: "DISCOUNT_PERCENT",
+    discountValue: 10,
+    bgColor: "from-amber-600 to-yellow-500",
+    textColor: "text-white",
+    couponCode: "KAHVE10",
+  },
+  {
+    id: "3",
+    name: "Yaz Fırsatı",
+    description: "100₺ üzeri siparişlerde 25₺ indirim",
+    type: "DISCOUNT_AMOUNT",
+    discountValue: 25,
+    bgColor: "from-cyan-500 to-blue-500",
+    textColor: "text-white",
+    couponCode: "YAZ2024",
+  },
 ]
 
 const demoMenuItems: MenuItem[] = [
@@ -105,6 +181,7 @@ const demoMenuItems: MenuItem[] = [
     description: "Espresso ve buharla ısıtılmış süt",
     price: 65,
     category: "sicak-icecekler",
+    allergens: ["dairy"],
     variations: [
       { name: "Boyut", options: [{ name: "Small", price: 0 }, { name: "Medium", price: 10 }, { name: "Large", price: 20 }] },
       { name: "Süt", options: [{ name: "Normal", price: 0 }, { name: "Yulaf Sütü", price: 8 }, { name: "Badem Sütü", price: 8 }, { name: "Laktozsuz", price: 5 }] },
@@ -123,6 +200,7 @@ const demoMenuItems: MenuItem[] = [
     price: 60,
     category: "sicak-icecekler",
     tags: ["popüler"],
+    allergens: ["dairy"],
     variations: [
       { name: "Boyut", options: [{ name: "Small", price: 0 }, { name: "Medium", price: 10 }, { name: "Large", price: 20 }] },
     ],
@@ -147,6 +225,7 @@ const demoMenuItems: MenuItem[] = [
     description: "Soğuk süt ve espresso",
     price: 70,
     category: "soguk-icecekler",
+    allergens: ["dairy"],
     variations: [
       { name: "Boyut", options: [{ name: "Medium", price: 0 }, { name: "Large", price: 15 }] },
       { name: "Süt", options: [{ name: "Normal", price: 0 }, { name: "Yulaf Sütü", price: 8 }, { name: "Badem Sütü", price: 8 }] },
@@ -178,6 +257,7 @@ const demoMenuItems: MenuItem[] = [
     price: 85,
     category: "tatlilar",
     tags: ["popüler"],
+    allergens: ["dairy", "eggs", "gluten"],
     variations: [
       { name: "Sos", options: [{ name: "Frambuaz", price: 0 }, { name: "Çikolata", price: 0 }, { name: "Karamel", price: 0 }] },
     ],
@@ -192,6 +272,7 @@ const demoMenuItems: MenuItem[] = [
     description: "İtalyan usulü, mascarpone kremalı",
     price: 90,
     category: "tatlilar",
+    allergens: ["dairy", "eggs", "gluten"],
     extras: [
       { id: "e10", name: "Dondurma", price: 15 },
     ],
@@ -202,6 +283,7 @@ const demoMenuItems: MenuItem[] = [
     description: "Sıcak çikolatalı, dondurma ile",
     price: 75,
     category: "tatlilar",
+    allergens: ["gluten", "eggs", "dairy", "nuts"],
     variations: [
       { name: "Servis", options: [{ name: "Normal", price: 0 }, { name: "Sıcak", price: 0 }] },
     ],
@@ -217,6 +299,7 @@ const demoMenuItems: MenuItem[] = [
     description: "Tavuklu, avokadolu, tam buğday ekmeği",
     price: 95,
     category: "atistirmaliklar",
+    allergens: ["gluten"],
     variations: [
       { name: "Ekmek", options: [{ name: "Tam Buğday", price: 0 }, { name: "Beyaz", price: 0 }, { name: "Çavdar", price: 5 }] },
     ],
@@ -232,6 +315,7 @@ const demoMenuItems: MenuItem[] = [
     description: "Kaşarlı, domatesli, közlenmiş biber",
     price: 65,
     category: "atistirmaliklar",
+    allergens: ["gluten", "dairy"],
     variations: [
       { name: "Boyut", options: [{ name: "Normal", price: 0 }, { name: "Jumbo", price: 20 }] },
     ],
@@ -248,6 +332,7 @@ const demoMenuItems: MenuItem[] = [
     price: 35,
     category: "atistirmaliklar",
     tags: ["vegan"],
+    allergens: ["gluten"],
   },
 ]
 
@@ -290,14 +375,103 @@ export default function CustomerMenuPage({ params }: CustomerMenuPageProps) {
   const [couponError, setCouponError] = useState("")
   const [couponLoading, setCouponLoading] = useState(false)
 
+  // Language state
+  const [locale, setLocale] = useState<Locale>(defaultLocale)
+
+  // Favorites state
+  const [favorites, setFavorites] = useState<string[]>([])
+
+  // Load favorites from localStorage
+  useEffect(() => {
+    const savedFavorites = localStorage.getItem(`favorites-${slug}`)
+    if (savedFavorites) {
+      setFavorites(JSON.parse(savedFavorites))
+    }
+  }, [slug])
+
+  const toggleFavorite = (itemId: string) => {
+    setFavorites(prev => {
+      const newFavorites = prev.includes(itemId)
+        ? prev.filter(id => id !== itemId)
+        : [...prev, itemId]
+      localStorage.setItem(`favorites-${slug}`, JSON.stringify(newFavorites))
+      return newFavorites
+    })
+  }
+
+  // Allergen filter state
+  const [excludedAllergens, setExcludedAllergens] = useState<AllergenType[]>([])
+  const [isAllergenFilterOpen, setIsAllergenFilterOpen] = useState(false)
+
+  // Load allergen preferences from localStorage
+  useEffect(() => {
+    const savedAllergens = localStorage.getItem("excluded-allergens")
+    if (savedAllergens) {
+      setExcludedAllergens(JSON.parse(savedAllergens))
+    }
+  }, [])
+
+  const toggleAllergen = (allergen: AllergenType) => {
+    setExcludedAllergens(prev => {
+      const newExcluded = prev.includes(allergen)
+        ? prev.filter(a => a !== allergen)
+        : [...prev, allergen]
+      localStorage.setItem("excluded-allergens", JSON.stringify(newExcluded))
+      return newExcluded
+    })
+  }
+
+  // Order history state
+  const [orderHistory, setOrderHistory] = useState<OrderHistoryItem[]>([])
+  const [isOrderHistoryOpen, setIsOrderHistoryOpen] = useState(false)
+
+  // Load order history from localStorage
+  useEffect(() => {
+    const savedHistory = localStorage.getItem(`order-history-${slug}`)
+    if (savedHistory) {
+      setOrderHistory(JSON.parse(savedHistory))
+    }
+  }, [slug])
+
+  // Save order to history
+  const saveOrderToHistory = (orderId: string) => {
+    const newOrder: OrderHistoryItem = {
+      id: orderId,
+      date: new Date().toISOString(),
+      items: [...cart],
+      total: cartTotal,
+      tableNumber: tableNumber || undefined,
+    }
+    const newHistory = [newOrder, ...orderHistory].slice(0, 10) // Keep last 10 orders
+    setOrderHistory(newHistory)
+    localStorage.setItem(`order-history-${slug}`, JSON.stringify(newHistory))
+  }
+
+  // Reorder from history
+  const reorderFromHistory = (order: OrderHistoryItem) => {
+    setCart(order.items.map(item => ({ ...item, cartId: `${item.id}-${Date.now()}` })))
+    setIsOrderHistoryOpen(false)
+    setIsCartOpen(true)
+  }
+
   useEffect(() => {
     params.then((p) => setSlug(p.slug))
   }, [params])
 
-  // Kategoriye göre filtreleme
-  const filteredItems = selectedCategory === "all"
-    ? demoMenuItems
-    : demoMenuItems.filter(item => item.category === selectedCategory)
+  // Kategoriye göre filtreleme + alerjen filtresi
+  const filteredItems = demoMenuItems
+    .filter(item => {
+      // Category filter
+      if (selectedCategory === "favorites") return favorites.includes(item.id)
+      if (selectedCategory !== "all" && item.category !== selectedCategory) return false
+      return true
+    })
+    .filter(item => {
+      // Allergen filter - exclude items that contain any of the excluded allergens
+      if (excludedAllergens.length === 0) return true
+      if (!item.allergens) return true
+      return !item.allergens.some(allergen => excludedAllergens.includes(allergen))
+    })
 
   // Ürün modal'ını aç
   const openProductModal = (item: MenuItem) => {
@@ -497,6 +671,7 @@ export default function CustomerMenuPage({ params }: CustomerMenuPageProps) {
       const data = await response.json()
 
       if (data.success && data.data?.id) {
+        saveOrderToHistory(data.data.id)
         setOrderSent(true)
         clearCart()
         // Sipariş takip sayfasına yönlendir
@@ -510,6 +685,7 @@ export default function CustomerMenuPage({ params }: CustomerMenuPageProps) {
       // API bağlantı hatası - demo mode
       // Demo için random order ID oluştur
       const demoOrderId = `demo_${Date.now()}`
+      saveOrderToHistory(demoOrderId)
       setOrderSent(true)
       clearCart()
       setTimeout(() => {
@@ -633,28 +809,70 @@ export default function CustomerMenuPage({ params }: CustomerMenuPageProps) {
               {tableNumber && (
                 <div className="flex items-center gap-1 text-sm text-muted-foreground">
                   <span className="inline-flex h-2 w-2 rounded-full bg-green-500" />
-                  Masa {tableNumber}
+                  {locale === "en" ? "Table" : locale === "de" ? "Tisch" : locale === "ar" ? "طاولة" : locale === "ru" ? "Стол" : "Masa"} {tableNumber}
                 </div>
               )}
             </div>
           </div>
-          <Button
-            variant="outline"
-            size="icon"
-            className="relative h-11 w-11 rounded-xl border-2 transition-all hover:scale-105 hover:border-primary"
-            onClick={() => setIsCartOpen(true)}
-          >
-            <ShoppingCart className="h-5 w-5" />
-            {cartItemCount > 0 && (
-              <span className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground shadow-lg animate-in zoom-in">
-                {cartItemCount}
-              </span>
+          <div className="flex items-center gap-1">
+            <ThemeToggle />
+            <LanguageSelector onLocaleChange={setLocale} />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsAllergenFilterOpen(true)}
+              className={`relative flex items-center gap-1.5 rounded-xl px-3 py-2 ${
+                excludedAllergens.length > 0 ? "bg-yellow-50 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400" : ""
+              }`}
+            >
+              <ShieldAlert className="h-4 w-4" />
+              {excludedAllergens.length > 0 && (
+                <span className="text-xs font-medium">{excludedAllergens.length}</span>
+              )}
+            </Button>
+            {orderHistory.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsOrderHistoryOpen(true)}
+                className="relative flex items-center gap-1.5 rounded-xl px-3 py-2"
+              >
+                <History className="h-4 w-4" />
+              </Button>
             )}
-          </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              className="relative h-11 w-11 rounded-xl border-2 transition-all hover:scale-105 hover:border-primary"
+              onClick={() => setIsCartOpen(true)}
+            >
+              <ShoppingCart className="h-5 w-5" />
+              {cartItemCount > 0 && (
+                <span className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground shadow-lg animate-in zoom-in">
+                  {cartItemCount}
+                </span>
+              )}
+            </Button>
+          </div>
         </div>
 
         {/* Kategoriler */}
         <div className="flex gap-2 overflow-x-auto px-4 pb-4 scrollbar-hide">
+          {/* Favorites category */}
+          {favorites.length > 0 && (
+            <button
+              onClick={() => setSelectedCategory("favorites")}
+              className={`whitespace-nowrap rounded-xl px-5 py-2.5 text-sm font-medium transition-all flex items-center gap-1.5 ${
+                selectedCategory === "favorites"
+                  ? "bg-red-500 text-white shadow-lg shadow-red-500/25 scale-105"
+                  : "bg-red-50 text-red-600 hover:bg-red-100 hover:scale-102"
+              }`}
+            >
+              <Heart className="h-4 w-4 fill-current" />
+              {locale === "en" ? "Favorites" : locale === "de" ? "Favoriten" : locale === "ar" ? "المفضلة" : locale === "ru" ? "Избранное" : "Favoriler"}
+              <span className="rounded-full bg-white/20 px-1.5 text-xs">{favorites.length}</span>
+            </button>
+          )}
           {demoCategories.map((cat) => (
             <button
               key={cat.id}
@@ -665,11 +883,48 @@ export default function CustomerMenuPage({ params }: CustomerMenuPageProps) {
                   : "bg-muted/80 hover:bg-muted hover:scale-102"
               }`}
             >
-              {cat.name}
+              {cat.id === "all" ? t("menu.all", locale) : cat.name}
             </button>
           ))}
         </div>
       </header>
+
+      {/* Kampanya Banner'ları */}
+      {demoCampaigns.length > 0 && (
+        <div className="overflow-x-auto px-4 pt-4 pb-2 scrollbar-hide">
+          <div className="flex gap-3">
+            {demoCampaigns.map((campaign) => (
+              <div
+                key={campaign.id}
+                className={`flex-shrink-0 w-72 rounded-2xl bg-gradient-to-r ${campaign.bgColor} p-4 shadow-lg cursor-pointer transition-transform hover:scale-[1.02]`}
+                onClick={() => {
+                  if (campaign.couponCode) {
+                    setCouponCode(campaign.couponCode)
+                    setIsCartOpen(true)
+                  }
+                }}
+              >
+                <div className={campaign.textColor}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium opacity-80">
+                      {campaign.type === "DISCOUNT_PERCENT" && `%${campaign.discountValue}`}
+                      {campaign.type === "DISCOUNT_AMOUNT" && `₺${campaign.discountValue}`}
+                      {campaign.type === "BUY_X_GET_Y" && "FIRSATI"}
+                    </span>
+                    {campaign.couponCode && (
+                      <span className="rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-bold backdrop-blur-sm">
+                        {campaign.couponCode}
+                      </span>
+                    )}
+                  </div>
+                  <h3 className="mt-1 text-lg font-bold">{campaign.name}</h3>
+                  <p className="mt-0.5 text-sm opacity-90">{campaign.description}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Menü Listesi */}
       <main className="p-4">
@@ -702,7 +957,7 @@ export default function CustomerMenuPage({ params }: CustomerMenuPageProps) {
                       <div className="absolute left-1 top-1">
                         <Badge variant="secondary" className="bg-yellow-100 text-yellow-700 text-[10px] px-1.5 py-0">
                           <Star className="mr-0.5 h-2.5 w-2.5 fill-current" />
-                          Popüler
+                          {t("menu.popular", locale)}
                         </Badge>
                       </div>
                     )}
@@ -713,6 +968,22 @@ export default function CustomerMenuPage({ params }: CustomerMenuPageProps) {
                         </Badge>
                       </div>
                     )}
+                    {/* Favorite button */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        toggleFavorite(item.id)
+                      }}
+                      className="absolute right-1 bottom-1 rounded-full bg-background/80 p-1.5 backdrop-blur-sm transition-all hover:scale-110"
+                    >
+                      <Heart
+                        className={`h-4 w-4 transition-colors ${
+                          favorites.includes(item.id)
+                            ? "fill-red-500 text-red-500"
+                            : "text-muted-foreground"
+                        }`}
+                      />
+                    </button>
                   </div>
 
                   {/* Ürün Bilgileri */}
@@ -743,6 +1014,23 @@ export default function CustomerMenuPage({ params }: CustomerMenuPageProps) {
                       <p className="mt-1.5 text-xs text-muted-foreground line-clamp-2">
                         {item.description}
                       </p>
+                      {/* Allergen indicators */}
+                      {item.allergens && item.allergens.length > 0 && (
+                        <div className="mt-1.5 flex flex-wrap gap-1">
+                          {item.allergens.slice(0, 3).map(allergen => (
+                            <span
+                              key={allergen}
+                              className="text-xs"
+                              title={locale === "en" ? allergenInfo[allergen].nameEn : allergenInfo[allergen].name}
+                            >
+                              {allergenInfo[allergen].icon}
+                            </span>
+                          ))}
+                          {item.allergens.length > 3 && (
+                            <span className="text-xs text-muted-foreground">+{item.allergens.length - 3}</span>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     {/* Sepet Kontrolleri */}
@@ -753,7 +1041,7 @@ export default function CustomerMenuPage({ params }: CustomerMenuPageProps) {
                         onClick={() => addSimpleToCart(item)}
                       >
                         <Plus className="mr-1 h-4 w-4" />
-                        {hasOptions ? "Seçenekler" : "Sepete Ekle"}
+                        {hasOptions ? t("product.variations", locale) : t("product.addToCart", locale)}
                       </Button>
                     </div>
                   </div>
@@ -800,8 +1088,8 @@ export default function CustomerMenuPage({ params }: CustomerMenuPageProps) {
             {/* Sepet Header */}
             <div className="sticky top-0 flex items-center justify-between border-b bg-background px-6 py-4">
               <div>
-                <h2 className="text-xl font-bold">Sepetim</h2>
-                <p className="text-sm text-muted-foreground">{cartItemCount} ürün</p>
+                <h2 className="text-xl font-bold">{t("cart.title", locale)}</h2>
+                <p className="text-sm text-muted-foreground">{cartItemCount} {t("cart.items", locale)}</p>
               </div>
               <Button variant="ghost" size="icon" className="rounded-xl" onClick={() => setIsCartOpen(false)}>
                 <X className="h-5 w-5" />
@@ -813,7 +1101,7 @@ export default function CustomerMenuPage({ params }: CustomerMenuPageProps) {
               {cart.length === 0 ? (
                 <div className="py-12 text-center">
                   <ShoppingCart className="mx-auto h-12 w-12 text-muted-foreground/50" />
-                  <p className="mt-4 text-muted-foreground">Sepetiniz boş</p>
+                  <p className="mt-4 text-muted-foreground">{t("cart.empty", locale)}</p>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -875,26 +1163,28 @@ export default function CustomerMenuPage({ params }: CustomerMenuPageProps) {
               <div className="border-t bg-background p-6">
                 {/* Masa Bilgisi */}
                 {tableNumber && (
-                  <div className="mb-4 flex items-center gap-2 rounded-xl bg-green-50 p-3 text-sm text-green-700">
+                  <div className="mb-4 flex items-center gap-2 rounded-xl bg-green-50 dark:bg-green-900/30 p-3 text-sm text-green-700 dark:text-green-400">
                     <span className="inline-flex h-2 w-2 rounded-full bg-green-500" />
-                    <span>Masa {tableNumber} için sipariş verilecek</span>
+                    <span>
+                      {locale === "en" ? `Order for Table ${tableNumber}` : `Masa ${tableNumber} için sipariş verilecek`}
+                    </span>
                   </div>
                 )}
 
                 {/* Kupon */}
                 <div className="mb-4">
                   {couponApplied ? (
-                    <div className="flex items-center justify-between rounded-xl bg-green-50 p-3">
+                    <div className="flex items-center justify-between rounded-xl bg-green-50 dark:bg-green-900/30 p-3">
                       <div className="flex items-center gap-2">
                         <span className="text-green-600">🎟️</span>
-                        <span className="font-medium text-green-700">{couponApplied.code}</span>
-                        <span className="text-sm text-green-600">
+                        <span className="font-medium text-green-700 dark:text-green-400">{couponApplied.code}</span>
+                        <span className="text-sm text-green-600 dark:text-green-500">
                           ({couponApplied.discountType === "percent" ? `%${couponApplied.discountValue}` : `₺${couponApplied.discountValue}`})
                         </span>
                       </div>
                       <button
                         onClick={removeCoupon}
-                        className="rounded-lg p-1 text-green-600 hover:bg-green-100"
+                        className="rounded-lg p-1 text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-800/50"
                       >
                         <X className="h-4 w-4" />
                       </button>
@@ -905,7 +1195,7 @@ export default function CustomerMenuPage({ params }: CustomerMenuPageProps) {
                         type="text"
                         value={couponCode}
                         onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-                        placeholder="Kupon kodu"
+                        placeholder={t("coupon.placeholder", locale)}
                         className="flex-1 rounded-xl border border-slate-200 px-4 py-2 text-sm uppercase focus:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-100"
                       />
                       <Button
@@ -914,7 +1204,7 @@ export default function CustomerMenuPage({ params }: CustomerMenuPageProps) {
                         disabled={couponLoading || !couponCode.trim()}
                         className="rounded-xl"
                       >
-                        {couponLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Uygula"}
+                        {couponLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : t("coupon.apply", locale)}
                       </Button>
                     </div>
                   )}
@@ -927,11 +1217,11 @@ export default function CustomerMenuPage({ params }: CustomerMenuPageProps) {
                 {discount > 0 && (
                   <div className="mb-2 space-y-1">
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Ara Toplam</span>
+                      <span className="text-muted-foreground">{t("cart.subtotal", locale)}</span>
                       <span>₺{cartSubtotal.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between text-sm text-green-600">
-                      <span>İndirim</span>
+                      <span>{t("cart.discount", locale)}</span>
                       <span>-₺{discount.toFixed(2)}</span>
                     </div>
                   </div>
@@ -939,7 +1229,7 @@ export default function CustomerMenuPage({ params }: CustomerMenuPageProps) {
 
                 {/* Toplam */}
                 <div className="mb-4 flex justify-between text-lg">
-                  <span className="text-muted-foreground">Toplam</span>
+                  <span className="text-muted-foreground">{t("cart.total", locale)}</span>
                   <span className="text-2xl font-bold">₺{cartTotal.toFixed(2)}</span>
                 </div>
 
@@ -953,11 +1243,11 @@ export default function CustomerMenuPage({ params }: CustomerMenuPageProps) {
                   {orderSent ? (
                     <>
                       <Sparkles className="mr-2 h-5 w-5" />
-                      Siparişiniz Alındı!
+                      {locale === "en" ? "Order Received!" : locale === "de" ? "Bestellung erhalten!" : locale === "ar" ? "تم استلام الطلب!" : locale === "ru" ? "Заказ принят!" : "Siparişiniz Alındı!"}
                     </>
                   ) : (
                     <>
-                      Sipariş Ver
+                      {t("cart.checkout", locale)}
                       <ChevronRight className="ml-2 h-5 w-5" />
                     </>
                   )}
@@ -1073,6 +1363,189 @@ export default function CustomerMenuPage({ params }: CustomerMenuPageProps) {
         </div>
       )}
 
+      {/* Sipariş Geçmişi Modal */}
+      {isOrderHistoryOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm animate-in fade-in"
+          onClick={() => setIsOrderHistoryOpen(false)}
+        >
+          <div
+            className="absolute bottom-0 left-0 right-0 max-h-[80vh] overflow-hidden rounded-t-3xl bg-background shadow-2xl animate-in slide-in-from-bottom"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Handle */}
+            <div className="flex justify-center pt-3 pb-1">
+              <div className="h-1.5 w-12 rounded-full bg-muted-foreground/30" />
+            </div>
+
+            {/* Header */}
+            <div className="sticky top-0 flex items-center justify-between border-b bg-background px-6 py-4">
+              <div>
+                <h2 className="text-xl font-bold flex items-center gap-2">
+                  <History className="h-5 w-5" />
+                  {t("order.history", locale)}
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  {locale === "en" ? "Your recent orders" : "Son siparişleriniz"}
+                </p>
+              </div>
+              <Button variant="ghost" size="icon" className="rounded-xl" onClick={() => setIsOrderHistoryOpen(false)}>
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+
+            {/* Content */}
+            <div className="overflow-y-auto p-4" style={{ maxHeight: "calc(80vh - 150px)" }}>
+              {orderHistory.length === 0 ? (
+                <div className="py-12 text-center">
+                  <History className="mx-auto h-12 w-12 text-muted-foreground/50" />
+                  <p className="mt-4 text-muted-foreground">
+                    {locale === "en" ? "No order history yet" : "Henüz sipariş geçmişi yok"}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {orderHistory.map((order, index) => (
+                    <div key={order.id} className="rounded-xl border p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <div>
+                          <p className="font-medium">#{order.id.slice(-6).toUpperCase()}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {new Date(order.date).toLocaleDateString(locale === "en" ? "en-US" : "tr-TR", {
+                              day: "numeric",
+                              month: "short",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </p>
+                        </div>
+                        <span className="text-lg font-bold">₺{order.total.toFixed(2)}</span>
+                      </div>
+
+                      <div className="space-y-1 mb-3">
+                        {order.items.slice(0, 3).map((item, i) => (
+                          <p key={i} className="text-sm text-muted-foreground">
+                            {item.quantity}x {item.name}
+                          </p>
+                        ))}
+                        {order.items.length > 3 && (
+                          <p className="text-xs text-muted-foreground">
+                            +{order.items.length - 3} {locale === "en" ? "more items" : "ürün daha"}
+                          </p>
+                        )}
+                      </div>
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full rounded-xl"
+                        onClick={() => reorderFromHistory(order)}
+                      >
+                        <RotateCcw className="mr-2 h-4 w-4" />
+                        {locale === "en" ? "Order Again" : "Tekrar Sipariş Ver"}
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Alerjen Filtre Modal */}
+      {isAllergenFilterOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm animate-in fade-in"
+          onClick={() => setIsAllergenFilterOpen(false)}
+        >
+          <div
+            className="absolute bottom-0 left-0 right-0 max-h-[70vh] overflow-hidden rounded-t-3xl bg-background shadow-2xl animate-in slide-in-from-bottom"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Handle */}
+            <div className="flex justify-center pt-3 pb-1">
+              <div className="h-1.5 w-12 rounded-full bg-muted-foreground/30" />
+            </div>
+
+            {/* Header */}
+            <div className="sticky top-0 flex items-center justify-between border-b bg-background px-6 py-4">
+              <div>
+                <h2 className="text-xl font-bold flex items-center gap-2">
+                  <ShieldAlert className="h-5 w-5 text-yellow-600" />
+                  {t("product.allergens", locale)}
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  {locale === "en" ? "Select allergens to avoid" : locale === "de" ? "Allergene zum Vermeiden auswählen" : locale === "ar" ? "حدد المواد المسببة للحساسية لتجنبها" : locale === "ru" ? "Выберите аллергены для исключения" : "Kaçınmak istediğiniz alerjenleri seçin"}
+                </p>
+              </div>
+              <Button variant="ghost" size="icon" className="rounded-xl" onClick={() => setIsAllergenFilterOpen(false)}>
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+
+            {/* Content */}
+            <div className="overflow-y-auto p-6">
+              {excludedAllergens.length > 0 && (
+                <div className="mb-4 flex items-center justify-between rounded-xl bg-yellow-50 p-3">
+                  <span className="text-sm text-yellow-700">
+                    {excludedAllergens.length} {locale === "en" ? "allergen(s) excluded" : "alerjen hariç tutuluyor"}
+                  </span>
+                  <button
+                    onClick={() => {
+                      setExcludedAllergens([])
+                      localStorage.removeItem("excluded-allergens")
+                    }}
+                    className="text-sm font-medium text-yellow-700 hover:underline"
+                  >
+                    {locale === "en" ? "Clear all" : "Temizle"}
+                  </button>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                {(Object.keys(allergenInfo) as AllergenType[]).map((allergen) => {
+                  const info = allergenInfo[allergen]
+                  const isExcluded = excludedAllergens.includes(allergen)
+                  return (
+                    <button
+                      key={allergen}
+                      onClick={() => toggleAllergen(allergen)}
+                      className={`flex items-center gap-3 rounded-xl p-4 text-left transition-all ${
+                        isExcluded
+                          ? "bg-yellow-100 border-2 border-yellow-400"
+                          : "bg-muted hover:bg-muted/80 border-2 border-transparent"
+                      }`}
+                    >
+                      <span className="text-2xl">{info.icon}</span>
+                      <div>
+                        <p className="font-medium text-sm">{locale === "en" ? info.nameEn : info.name}</p>
+                        {isExcluded && (
+                          <p className="text-xs text-yellow-600">
+                            {locale === "en" ? "Excluded" : "Hariç"}
+                          </p>
+                        )}
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="border-t bg-background p-6">
+              <Button
+                className="w-full rounded-xl py-6 text-base font-semibold"
+                size="lg"
+                onClick={() => setIsAllergenFilterOpen(false)}
+              >
+                {t("ui.confirm", locale)}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Ürün Detay Modal */}
       {selectedItem && (
         <div
@@ -1093,6 +1566,19 @@ export default function CustomerMenuPage({ params }: CustomerMenuPageProps) {
               <div>
                 <h2 className="text-xl font-bold">{selectedItem.name}</h2>
                 <p className="text-sm text-muted-foreground">{selectedItem.description}</p>
+                {/* Show allergens in product modal */}
+                {selectedItem.allergens && selectedItem.allergens.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {selectedItem.allergens.map(allergen => (
+                      <span
+                        key={allergen}
+                        className="inline-flex items-center gap-1 rounded-full bg-yellow-100 px-2 py-0.5 text-xs text-yellow-700"
+                      >
+                        {allergenInfo[allergen].icon} {locale === "en" ? allergenInfo[allergen].nameEn : allergenInfo[allergen].name}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
               <Button variant="ghost" size="icon" className="rounded-xl" onClick={() => setSelectedItem(null)}>
                 <X className="h-5 w-5" />
@@ -1138,7 +1624,7 @@ export default function CustomerMenuPage({ params }: CustomerMenuPageProps) {
               {/* Ekstralar */}
               {selectedItem.extras && selectedItem.extras.length > 0 && (
                 <div className={selectedItem.variations?.length ? "mt-6" : ""}>
-                  <h3 className="font-semibold mb-2">Ekstralar</h3>
+                  <h3 className="font-semibold mb-2">{t("product.extras", locale)}</h3>
                   <div className="space-y-2">
                     {selectedItem.extras.map((extra) => {
                       const isSelected = tempExtras.find(e => e.id === extra.id)
@@ -1154,7 +1640,7 @@ export default function CustomerMenuPage({ params }: CustomerMenuPageProps) {
                         >
                           <span className="font-medium">{extra.name}</span>
                           <span className={isSelected ? "text-primary font-bold" : "text-muted-foreground"}>
-                            {extra.price > 0 ? `+₺${extra.price}` : "Ücretsiz"}
+                            {extra.price > 0 ? `+₺${extra.price}` : (locale === "en" ? "Free" : "Ücretsiz")}
                           </span>
                         </button>
                       )
@@ -1205,7 +1691,7 @@ export default function CustomerMenuPage({ params }: CustomerMenuPageProps) {
                 onClick={addToCartFromModal}
               >
                 <ShoppingCart className="mr-2 h-5 w-5" />
-                Sepete Ekle
+                {t("product.addToCart", locale)}
               </Button>
             </div>
           </div>
