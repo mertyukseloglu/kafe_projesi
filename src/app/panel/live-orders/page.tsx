@@ -4,7 +4,18 @@ import { useState, useEffect, useCallback } from "react"
 import { useSession } from "next-auth/react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { useRealtimeOrders } from "@/lib/pusher/client"
+import { toast } from "@/hooks/use-toast"
 import {
   CheckCircle,
   ChefHat,
@@ -171,6 +182,8 @@ export default function LiveOrdersPage() {
   const [soundEnabled, setSoundEnabled] = useState(true)
   const [filter, setFilter] = useState<OrderStatus | "ALL">("ALL")
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
+  const [orderToCancel, setOrderToCancel] = useState<string | null>(null)
 
   // Real-time subscription
   const { isConnected } = useRealtimeOrders(session?.user?.tenantId || null, {
@@ -245,11 +258,20 @@ export default function LiveOrdersPage() {
     }
   }, [soundEnabled])
 
-  // Siparişi iptal et
-  const cancelOrder = (orderId: string) => {
-    if (confirm("Siparişi iptal etmek istediğinize emin misiniz?")) {
-      updateOrderStatus(orderId, "CANCELLED")
+  // Siparişi iptal et - AlertDialog aç
+  const handleCancelClick = (orderId: string) => {
+    setOrderToCancel(orderId)
+    setCancelDialogOpen(true)
+  }
+
+  // İptal onayı
+  const confirmCancelOrder = () => {
+    if (orderToCancel) {
+      updateOrderStatus(orderToCancel, "CANCELLED")
+      toast.success("Sipariş İptal Edildi", "Sipariş başarıyla iptal edildi.")
     }
+    setCancelDialogOpen(false)
+    setOrderToCancel(null)
   }
 
   // Yenile - API'den çek
@@ -460,7 +482,8 @@ export default function LiveOrdersPage() {
                         variant="outline"
                         size="icon"
                         className="border-red-200 text-red-600 hover:bg-red-50"
-                        onClick={() => cancelOrder(order.id)}
+                        onClick={() => handleCancelClick(order.id)}
+                        aria-label="Siparişi iptal et"
                       >
                         <XCircle className="h-4 w-4" />
                       </Button>
@@ -477,6 +500,24 @@ export default function LiveOrdersPage() {
       <div className="mt-6 text-center text-sm text-slate-500">
         Sayfa otomatik olarak yenileniyor • Son güncelleme: {new Date().toLocaleTimeString("tr-TR")}
       </div>
+
+      {/* İptal Onay Dialog */}
+      <AlertDialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Siparişi İptal Et</AlertDialogTitle>
+            <AlertDialogDescription>
+              Bu siparişi iptal etmek istediğinize emin misiniz? Bu işlem geri alınamaz.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Vazgeç</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmCancelOrder}>
+              İptal Et
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

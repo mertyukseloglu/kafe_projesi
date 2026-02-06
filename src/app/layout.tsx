@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next"
 import { AuthProvider } from "@/components/providers/session-provider"
+import { Toaster } from "@/components/ui/toaster"
 import "./globals.css"
 
 export const metadata: Metadata = {
@@ -49,6 +50,7 @@ export default function RootLayout({
       </head>
       <body className="antialiased">
         <AuthProvider>{children}</AuthProvider>
+        <Toaster />
         <script
           dangerouslySetInnerHTML={{
             __html: `

@@ -102,6 +102,7 @@ export default function TenantLayout({ children }: TenantLayoutProps) {
             size="icon"
             className="lg:hidden"
             onClick={() => setSidebarOpen(false)}
+            aria-label="Menüyü kapat"
           >
             <X className="h-5 w-5" />
           </Button>
@@ -160,6 +161,7 @@ export default function TenantLayout({ children }: TenantLayoutProps) {
             size="icon"
             className="lg:hidden"
             onClick={() => setSidebarOpen(true)}
+            aria-label="Menüyü aç"
           >
             <Menu className="h-5 w-5" />
           </Button>
@@ -172,7 +174,7 @@ export default function TenantLayout({ children }: TenantLayoutProps) {
           {/* Right side actions */}
           <div className="flex items-center gap-2">
             {/* Notifications */}
-            <Button variant="ghost" size="icon" className="relative">
+            <Button variant="ghost" size="icon" className="relative" aria-label="Bildirimler">
               <Bell className="h-5 w-5" />
               {activeOrders > 0 && (
                 <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[10px] text-destructive-foreground">

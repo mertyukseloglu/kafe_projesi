@@ -75,6 +75,7 @@ export default function SuperAdminLayout({ children }: SuperAdminLayoutProps) {
             size="icon"
             className="text-slate-400 hover:text-white lg:hidden"
             onClick={() => setSidebarOpen(false)}
+            aria-label="Menüyü kapat"
           >
             <X className="h-5 w-5" />
           </Button>
@@ -121,6 +122,7 @@ export default function SuperAdminLayout({ children }: SuperAdminLayoutProps) {
             size="icon"
             className="text-slate-400 hover:text-white lg:hidden"
             onClick={() => setSidebarOpen(true)}
+            aria-label="Menüyü aç"
           >
             <Menu className="h-5 w-5" />
           </Button>
@@ -129,7 +131,7 @@ export default function SuperAdminLayout({ children }: SuperAdminLayoutProps) {
 
           {/* Right side */}
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="relative text-slate-400 hover:text-white">
+            <Button variant="ghost" size="icon" className="relative text-slate-400 hover:text-white" aria-label="Bildirimler">
               <Bell className="h-5 w-5" />
             </Button>
 
