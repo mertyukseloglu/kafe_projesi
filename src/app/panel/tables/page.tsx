@@ -119,9 +119,13 @@ export default function TablesPage() {
     available: tables.filter(t => t.isActive && !t.hasActiveOrder).length,
   }), [tables])
 
-  // QR URL oluştur - subdomain destekli
+  // Link için relative URL (hydration mismatch önlemek için)
+  const getMenuUrl = (tableNumber: string) => {
+    return `/customer/menu/${restaurantSlug}?table=${tableNumber}`
+  }
+
+  // QR kod için absolute URL (QR taraması için gerekli)
   const getQRUrl = (tableNumber: string) => {
-    // Production'da subdomain, development'ta path-based URL
     return getTableQrUrl(restaurantSlug, parseInt(tableNumber, 10))
   }
 
@@ -448,7 +452,7 @@ export default function TablesPage() {
                     className="h-8 w-8"
                     asChild
                   >
-                    <a href={getQRUrl(table.number)} target="_blank" rel="noopener" aria-label="Menüyü yeni sekmede aç">
+                    <a href={getMenuUrl(table.number)} target="_blank" rel="noopener" aria-label="Menüyü yeni sekmede aç">
                       <ExternalLink className="h-3 w-3" />
                     </a>
                   </Button>
@@ -507,7 +511,7 @@ export default function TablesPage() {
                           <Edit className="h-4 w-4" />
                         </Button>
                         <Button variant="ghost" size="sm" asChild>
-                          <a href={getQRUrl(table.number)} target="_blank" rel="noopener" aria-label="Menüyü yeni sekmede aç">
+                          <a href={getMenuUrl(table.number)} target="_blank" rel="noopener" aria-label="Menüyü yeni sekmede aç">
                             <ExternalLink className="h-4 w-4" />
                           </a>
                         </Button>
