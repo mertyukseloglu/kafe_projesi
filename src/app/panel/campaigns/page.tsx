@@ -5,6 +5,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { useToast } from "@/hooks/use-toast"
+import {
   Tag,
   Plus,
   Calendar,
@@ -81,6 +92,9 @@ export default function CampaignsPage() {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [campaignToDelete, setCampaignToDelete] = useState<Campaign | null>(null)
+  const { toast } = useToast()
 
   // Form state
   const [formData, setFormData] = useState({
@@ -168,13 +182,23 @@ export default function CampaignsPage() {
     }
   }
 
-  const deleteCampaign = async (id: string) => {
-    if (!confirm("Bu kampanyayı silmek istediğinize emin misiniz?")) return
+  const handleDeleteClick = (campaign: Campaign) => {
+    setCampaignToDelete(campaign)
+    setDeleteDialogOpen(true)
+  }
+
+  const confirmDeleteCampaign = async () => {
+    if (!campaignToDelete) return
     try {
-      await fetch(`/api/tenant/campaigns?id=${id}`, { method: "DELETE" })
+      await fetch(`/api/tenant/campaigns?id=${campaignToDelete.id}`, { method: "DELETE" })
       fetchCampaigns()
+      toast.success("Kampanya başarıyla silindi")
     } catch (error) {
       console.error("Delete error:", error)
+      toast.error("Kampanya silinirken bir hata oluştu")
+    } finally {
+      setDeleteDialogOpen(false)
+      setCampaignToDelete(null)
     }
   }
 
@@ -257,7 +281,7 @@ export default function CampaignsPage() {
           <Card className="w-full max-w-lg max-h-[90vh] overflow-y-auto m-4">
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>{editingCampaign ? "Kampanya Düzenle" : "Yeni Kampanya"}</CardTitle>
-              <Button variant="ghost" size="icon" onClick={() => { setShowForm(false); setEditingCampaign(null); resetForm(); }}>
+              <Button variant="ghost" size="icon" aria-label="Formu kapat" onClick={() => { setShowForm(false); setEditingCampaign(null); resetForm(); }}>
                 <X className="h-4 w-4" />
               </Button>
             </CardHeader>
@@ -469,6 +493,7 @@ export default function CampaignsPage() {
                   <Button
                     variant="outline"
                     size="icon"
+                    aria-label="Kampanyayı düzenle"
                     onClick={() => {
                       setEditingCampaign(campaign)
                       setFormData({
@@ -491,8 +516,9 @@ export default function CampaignsPage() {
                   <Button
                     variant="outline"
                     size="icon"
+                    aria-label="Kampanyayı sil"
                     className="text-red-500 hover:bg-red-50"
-                    onClick={() => deleteCampaign(campaign.id)}
+                    onClick={() => handleDeleteClick(campaign)}
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -515,6 +541,25 @@ export default function CampaignsPage() {
           </Card>
         )}
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Kampanyayı Sil</AlertDialogTitle>
+            <AlertDialogDescription>
+              &quot;{campaignToDelete?.name}&quot; kampanyasını silmek istediğinize emin misiniz?
+              Bu işlem geri alınamaz.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>İptal</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteCampaign}>
+              Sil
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

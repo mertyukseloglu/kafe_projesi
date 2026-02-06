@@ -6,6 +6,17 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { useToast } from "@/hooks/use-toast"
+import {
   Bell,
   CheckCircle,
   Clock,
@@ -117,6 +128,9 @@ export default function WaiterCallsPage() {
   const [filter, setFilter] = useState<CallStatus | "ALL">("ALL")
   const [soundEnabled, setSoundEnabled] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
+  const [callToCancel, setCallToCancel] = useState<WaiterCall | null>(null)
+  const { toast } = useToast()
 
   // Calculate elapsed time
   const getElapsedTime = (createdAt: string) => {
@@ -177,15 +191,23 @@ export default function WaiterCallsPage() {
   }, [])
 
   // Cancel call
-  const cancelCall = useCallback(async (callId: string) => {
-    if (!confirm("Çağrıyı iptal etmek istediğinize emin misiniz?")) return
+  const handleCancelClick = useCallback((call: WaiterCall) => {
+    setCallToCancel(call)
+    setCancelDialogOpen(true)
+  }, [])
+
+  const confirmCancelCall = useCallback(async () => {
+    if (!callToCancel) return
 
     setCalls(prev => prev.map(call =>
-      call.id === callId
+      call.id === callToCancel.id
         ? { ...call, status: "CANCELLED" as CallStatus }
         : call
     ))
-  }, [])
+    toast.success(`Masa ${callToCancel.tableNumber} çağrısı iptal edildi`)
+    setCancelDialogOpen(false)
+    setCallToCancel(null)
+  }, [callToCancel, toast])
 
   // Refresh calls
   const refreshCalls = async () => {
@@ -235,6 +257,7 @@ export default function WaiterCallsPage() {
           <Button
             variant="outline"
             size="sm"
+            aria-label={soundEnabled ? "Bildirimleri sustur" : "Bildirimleri aç"}
             onClick={() => setSoundEnabled(!soundEnabled)}
             className={soundEnabled ? "bg-green-50" : "bg-red-50"}
           >
@@ -406,8 +429,9 @@ export default function WaiterCallsPage() {
                         <Button
                           variant="outline"
                           size="icon"
+                          aria-label="Çağrıyı iptal et"
                           className="border-red-200 text-red-600 hover:bg-red-50"
-                          onClick={() => cancelCall(call.id)}
+                          onClick={() => handleCancelClick(call)}
                         >
                           <XCircle className="h-4 w-4" />
                         </Button>
@@ -440,6 +464,24 @@ export default function WaiterCallsPage() {
       <div className="text-center text-sm text-muted-foreground">
         Sayfa otomatik olarak yenileniyor • Son güncelleme: {new Date().toLocaleTimeString("tr-TR")}
       </div>
+
+      {/* Cancel Confirmation Dialog */}
+      <AlertDialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Çağrıyı İptal Et</AlertDialogTitle>
+            <AlertDialogDescription>
+              Masa {callToCancel?.tableNumber} çağrısını iptal etmek istediğinize emin misiniz?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Vazgeç</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmCancelCall}>
+              İptal Et
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

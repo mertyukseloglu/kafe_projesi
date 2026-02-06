@@ -4,6 +4,17 @@ import { useState, useMemo } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { toast } from "@/hooks/use-toast"
+import {
   Plus,
   Search,
   Edit,
@@ -86,6 +97,8 @@ export default function MenuPage() {
   const [showCategoryModal, setShowCategoryModal] = useState(false)
   const [editItem, setEditItem] = useState<MenuItem | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [itemToDelete, setItemToDelete] = useState<string | null>(null)
 
   // Form state for new/edit item
   const [formData, setFormData] = useState({
@@ -122,14 +135,23 @@ export default function MenuPage() {
     await refetch()
   }
 
-  // Silme
-  const deleteItem = async (itemId: string) => {
-    if (confirm("Bu ürünü silmek istediğinize emin misiniz?")) {
-      await mutate(`${API.tenant.menu}?id=${itemId}`, {
+  // Silme - AlertDialog aç
+  const handleDeleteClick = (itemId: string) => {
+    setItemToDelete(itemId)
+    setDeleteDialogOpen(true)
+  }
+
+  // Silme onayı
+  const confirmDeleteItem = async () => {
+    if (itemToDelete) {
+      await mutate(`${API.tenant.menu}?id=${itemToDelete}`, {
         method: "DELETE",
       })
       await refetch()
+      toast.success("Ürün Silindi", "Ürün başarıyla silindi.")
     }
+    setDeleteDialogOpen(false)
+    setItemToDelete(null)
   }
 
   // Yeni ürün ekle
@@ -316,7 +338,7 @@ export default function MenuPage() {
                       size="icon"
                       className="h-8 w-8"
                       onClick={() => toggleAvailability(item.id, item.isAvailable)}
-                      title={item.isAvailable ? "Satıştan Kaldır" : "Satışa Aç"}
+                      aria-label={item.isAvailable ? "Satıştan kaldır" : "Satışa aç"}
                       disabled={isMutating}
                     >
                       {item.isAvailable ? (
@@ -329,7 +351,8 @@ export default function MenuPage() {
                       variant="outline"
                       size="icon"
                       className="h-8 w-8 text-destructive hover:bg-destructive hover:text-destructive-foreground"
-                      onClick={() => deleteItem(item.id)}
+                      onClick={() => handleDeleteClick(item.id)}
+                      aria-label="Ürünü sil"
                       disabled={isMutating}
                     >
                       <Trash2 className="h-4 w-4" />
@@ -493,6 +516,24 @@ export default function MenuPage() {
           </Card>
         </div>
       )}
+
+      {/* Silme Onay Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Ürünü Sil</AlertDialogTitle>
+            <AlertDialogDescription>
+              Bu ürünü silmek istediğinize emin misiniz? Bu işlem geri alınamaz.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Vazgeç</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteItem}>
+              Sil
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

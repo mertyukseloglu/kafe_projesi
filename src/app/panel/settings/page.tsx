@@ -4,6 +4,17 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { toast } from "@/hooks/use-toast"
+import {
   Store,
   Clock,
   Palette,
@@ -132,6 +143,8 @@ export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState("general")
   const [showSaved, setShowSaved] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [staffToDelete, setStaffToDelete] = useState<string | null>(null)
 
   // Form states
   const [restaurant, setRestaurant] = useState(demoRestaurant)
@@ -198,13 +211,23 @@ export default function SettingsPage() {
     await refetch()
   }
 
-  const handleDeleteStaff = async (userId: string) => {
-    if (confirm("Bu personeli silmek istediğinize emin misiniz?")) {
-      await mutate(`${API.tenant.settings}?userId=${userId}`, {
+  // Personel sil - AlertDialog aç
+  const handleDeleteClick = (userId: string) => {
+    setStaffToDelete(userId)
+    setDeleteDialogOpen(true)
+  }
+
+  // Silme onayı
+  const confirmDeleteStaff = async () => {
+    if (staffToDelete) {
+      await mutate(`${API.tenant.settings}?userId=${staffToDelete}`, {
         method: "DELETE",
       })
       await refetch()
+      toast.success("Personel Silindi", "Personel başarıyla silindi.")
     }
+    setDeleteDialogOpen(false)
+    setStaffToDelete(null)
   }
 
   const handleRefresh = async () => {
@@ -690,8 +713,9 @@ export default function SettingsPage() {
                         variant="ghost"
                         size="icon"
                         className="text-destructive"
-                        onClick={() => handleDeleteStaff(member.id)}
+                        onClick={() => handleDeleteClick(member.id)}
                         disabled={isMutating}
+                        aria-label="Personeli sil"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -774,6 +798,24 @@ export default function SettingsPage() {
           </Card>
         </div>
       )}
+
+      {/* Silme Onay Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Personeli Sil</AlertDialogTitle>
+            <AlertDialogDescription>
+              Bu personeli silmek istediğinize emin misiniz? Kullanıcı artık sisteme erişemeyecektir.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Vazgeç</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteStaff}>
+              Sil
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

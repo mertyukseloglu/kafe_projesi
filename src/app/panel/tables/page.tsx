@@ -4,6 +4,17 @@ import { useState, useMemo, useRef } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { toast } from "@/hooks/use-toast"
+import {
   Plus,
   QrCode,
   Download,
@@ -70,6 +81,8 @@ export default function TablesPage() {
   const [selectedTables, setSelectedTables] = useState<string[]>([])
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [qrModalTable, setQrModalTable] = useState<Table | null>(null)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [tableToDelete, setTableToDelete] = useState<string | null>(null)
   const qrRef = useRef<HTMLDivElement>(null)
 
   // Form state
@@ -206,14 +219,23 @@ export default function TablesPage() {
     printWindow.document.close()
   }
 
-  // Masa sil
-  const deleteTable = async (tableId: string) => {
-    if (confirm("Bu masayı silmek istediğinize emin misiniz?")) {
-      await mutate(`${API.tenant.tables}?id=${tableId}`, {
+  // Masa sil - AlertDialog aç
+  const handleDeleteClick = (tableId: string) => {
+    setTableToDelete(tableId)
+    setDeleteDialogOpen(true)
+  }
+
+  // Silme onayı
+  const confirmDeleteTable = async () => {
+    if (tableToDelete) {
+      await mutate(`${API.tenant.tables}?id=${tableToDelete}`, {
         method: "DELETE",
       })
       await refetch()
+      toast.success("Masa Silindi", "Masa başarıyla silindi.")
     }
+    setDeleteDialogOpen(false)
+    setTableToDelete(null)
   }
 
   // Masa ekle
@@ -416,6 +438,7 @@ export default function TablesPage() {
                     size="icon"
                     className="h-8 w-8"
                     onClick={() => openEditModal(table)}
+                    aria-label="Masayı düzenle"
                   >
                     <Edit className="h-3 w-3" />
                   </Button>
@@ -425,7 +448,7 @@ export default function TablesPage() {
                     className="h-8 w-8"
                     asChild
                   >
-                    <a href={getQRUrl(table.number)} target="_blank" rel="noopener">
+                    <a href={getQRUrl(table.number)} target="_blank" rel="noopener" aria-label="Menüyü yeni sekmede aç">
                       <ExternalLink className="h-3 w-3" />
                     </a>
                   </Button>
@@ -477,14 +500,14 @@ export default function TablesPage() {
                     </td>
                     <td className="p-3">
                       <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="sm" onClick={() => openQRModal(table)}>
+                        <Button variant="ghost" size="sm" onClick={() => openQRModal(table)} aria-label="QR kodu göster">
                           <QrCode className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="sm" onClick={() => openEditModal(table)}>
+                        <Button variant="ghost" size="sm" onClick={() => openEditModal(table)} aria-label="Masayı düzenle">
                           <Edit className="h-4 w-4" />
                         </Button>
                         <Button variant="ghost" size="sm" asChild>
-                          <a href={getQRUrl(table.number)} target="_blank" rel="noopener">
+                          <a href={getQRUrl(table.number)} target="_blank" rel="noopener" aria-label="Menüyü yeni sekmede aç">
                             <ExternalLink className="h-4 w-4" />
                           </a>
                         </Button>
@@ -492,8 +515,9 @@ export default function TablesPage() {
                           variant="ghost"
                           size="sm"
                           className="text-destructive"
-                          onClick={() => deleteTable(table.id)}
+                          onClick={() => handleDeleteClick(table.id)}
                           disabled={isMutating}
+                          aria-label="Masayı sil"
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -634,6 +658,24 @@ export default function TablesPage() {
           </Card>
         </div>
       )}
+
+      {/* Silme Onay Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Masayı Sil</AlertDialogTitle>
+            <AlertDialogDescription>
+              Bu masayı silmek istediğinize emin misiniz? QR kodu artık çalışmayacaktır.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Vazgeç</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteTable}>
+              Sil
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
