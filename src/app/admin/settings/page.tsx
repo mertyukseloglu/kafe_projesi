@@ -198,36 +198,16 @@ export default function SettingsPage() {
           <CardHeader>
             <div className="flex items-center gap-2">
               <CreditCard className="h-5 w-5 text-primary" />
-              <CardTitle className="text-white">Ödeme Gateway</CardTitle>
+              <CardTitle className="text-white">Ödeme Yöntemi</CardTitle>
             </div>
             <CardDescription className="text-slate-400">
-              Ödeme sistemi entegrasyonu
+              Restoran ödeme ayarları
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-300">Provider</label>
-              <select className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-white focus:border-primary focus:outline-none">
-                <option value="">Seçin...</option>
-                <option value="iyzico">iyzico</option>
-                <option value="stripe">Stripe</option>
-                <option value="paytr">PayTR</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-300">API Key</label>
-              <input
-                type="password"
-                className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-white focus:border-primary focus:outline-none"
-                placeholder="Henüz yapılandırılmadı"
-                disabled
-              />
-            </div>
-
-            <div className="flex items-center gap-2 rounded-lg bg-yellow-500/10 p-3 text-sm text-yellow-400">
-              <AlertCircle className="h-4 w-4" />
-              <span>Ödeme sistemi henüz yapılandırılmadı</span>
+            <div className="flex items-center gap-2 rounded-lg bg-green-500/10 p-3 text-sm text-green-400">
+              <CheckCircle className="h-4 w-4" />
+              <span>Masada Ödeme - Müşteriler siparişlerini uygulama üzerinden verir, ödeme masada yapılır</span>
             </div>
           </CardContent>
         </Card>

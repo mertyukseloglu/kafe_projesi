@@ -27,10 +27,8 @@ const demoSettings = {
     configured: false,
   },
   payments: {
-    provider: "iyzico",
-    testMode: true,
-    configured: false,
-    commissionRate: 2.5,
+    method: "at_table",
+    description: "Müşteriler siparişlerini uygulama üzerinden verir, ödeme masada yapılır",
   },
   notifications: {
     emailEnabled: true,
