@@ -23,6 +23,7 @@ import {
   MousePointer,
 } from "lucide-react"
 import { useFetch, API } from "@/hooks/use-api"
+import { DashboardSkeleton } from "@/components/ui/skeleton"
 
 // Tip tanımları
 interface DashboardData {

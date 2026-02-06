@@ -33,6 +33,7 @@ import {
   Loader2,
 } from "lucide-react"
 import { useFetch, useMutation, API } from "@/hooks/use-api"
+import { staffSchema } from "@/lib/validations/settings"
 
 // Tip tanımları
 interface Staff {
@@ -155,12 +156,24 @@ export default function SettingsPage() {
   const [themeColor, setThemeColor] = useState("#f97316")
 
   // Staff form
-  const [staffForm, setStaffForm] = useState({
+  const [staffForm, setStaffForm] = useState<{
+    name: string
+    email: string
+    password: string
+    role: "MANAGER" | "STAFF"
+  }>({
     name: "",
     email: "",
     password: "",
     role: "STAFF",
   })
+  const [staffFormErrors, setStaffFormErrors] = useState<Record<string, string>>({})
+
+  const clearStaffFormError = (field: string) => {
+    if (staffFormErrors[field]) {
+      setStaffFormErrors({ ...staffFormErrors, [field]: "" })
+    }
+  }
 
   // Update form when data loads
   useEffect(() => {
@@ -197,6 +210,22 @@ export default function SettingsPage() {
 
   const handleAddStaff = async (e: React.FormEvent) => {
     e.preventDefault()
+    setStaffFormErrors({})
+
+    // Zod validation
+    const result = staffSchema.safeParse(staffForm)
+    if (!result.success) {
+      const errors: Record<string, string> = {}
+      result.error.issues.forEach((issue) => {
+        const field = issue.path[0] as string
+        if (!errors[field]) {
+          errors[field] = issue.message
+        }
+      })
+      setStaffFormErrors(errors)
+      return
+    }
+
     await mutate(API.tenant.settings, {
       method: "POST",
       body: JSON.stringify({
@@ -746,10 +775,10 @@ export default function SettingsPage() {
                     type="text"
                     placeholder="Personel adı"
                     value={staffForm.name}
-                    onChange={(e) => setStaffForm({ ...staffForm, name: e.target.value })}
-                    className="mt-1 w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                    required
+                    onChange={(e) => { setStaffForm({ ...staffForm, name: e.target.value }); clearStaffFormError("name") }}
+                    className={`mt-1 w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary ${staffFormErrors.name ? "border-destructive" : ""}`}
                   />
+                  {staffFormErrors.name && <p className="mt-1 text-xs text-destructive">{staffFormErrors.name}</p>}
                 </div>
                 <div>
                   <label className="text-sm font-medium">E-posta *</label>
@@ -757,10 +786,10 @@ export default function SettingsPage() {
                     type="email"
                     placeholder="ornek@email.com"
                     value={staffForm.email}
-                    onChange={(e) => setStaffForm({ ...staffForm, email: e.target.value })}
-                    className="mt-1 w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                    required
+                    onChange={(e) => { setStaffForm({ ...staffForm, email: e.target.value }); clearStaffFormError("email") }}
+                    className={`mt-1 w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary ${staffFormErrors.email ? "border-destructive" : ""}`}
                   />
+                  {staffFormErrors.email && <p className="mt-1 text-xs text-destructive">{staffFormErrors.email}</p>}
                 </div>
                 <div>
                   <label className="text-sm font-medium">Şifre *</label>
@@ -768,16 +797,16 @@ export default function SettingsPage() {
                     type="password"
                     placeholder="••••••••"
                     value={staffForm.password}
-                    onChange={(e) => setStaffForm({ ...staffForm, password: e.target.value })}
-                    className="mt-1 w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                    required
+                    onChange={(e) => { setStaffForm({ ...staffForm, password: e.target.value }); clearStaffFormError("password") }}
+                    className={`mt-1 w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary ${staffFormErrors.password ? "border-destructive" : ""}`}
                   />
+                  {staffFormErrors.password && <p className="mt-1 text-xs text-destructive">{staffFormErrors.password}</p>}
                 </div>
                 <div>
                   <label className="text-sm font-medium">Rol *</label>
                   <select
                     value={staffForm.role}
-                    onChange={(e) => setStaffForm({ ...staffForm, role: e.target.value })}
+                    onChange={(e) => setStaffForm({ ...staffForm, role: e.target.value as "MANAGER" | "STAFF" })}
                     className="mt-1 w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                   >
                     <option value="STAFF">Personel (Garson)</option>

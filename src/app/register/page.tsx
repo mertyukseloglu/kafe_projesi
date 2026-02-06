@@ -6,6 +6,15 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Loader2, UtensilsCrossed } from "lucide-react"
+import { registerSchema } from "@/lib/validations/auth"
+
+type FieldErrors = {
+  name?: string
+  email?: string
+  password?: string
+  confirmPassword?: string
+  restaurantName?: string
+}
 
 export default function RegisterPage() {
   const router = useRouter()
@@ -19,26 +28,34 @@ export default function RegisterPage() {
   })
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [success, setSuccess] = useState(false)
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value })
+    // Clear field error when user types
+    if (fieldErrors[e.target.name as keyof FieldErrors]) {
+      setFieldErrors({ ...fieldErrors, [e.target.name]: undefined })
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
     setError(null)
+    setFieldErrors({})
 
-    // Validation
-    if (formData.password !== formData.confirmPassword) {
-      setError("Şifreler eşleşmiyor")
-      setIsLoading(false)
-      return
-    }
-
-    if (formData.password.length < 6) {
-      setError("Şifre en az 6 karakter olmalı")
+    // Zod validation
+    const result = registerSchema.safeParse(formData)
+    if (!result.success) {
+      const errors: FieldErrors = {}
+      result.error.issues.forEach((issue) => {
+        const field = issue.path[0] as keyof FieldErrors
+        if (!errors[field]) {
+          errors[field] = issue.message
+        }
+      })
+      setFieldErrors(errors)
       setIsLoading(false)
       return
     }
@@ -124,10 +141,14 @@ export default function RegisterPage() {
                 value={formData.restaurantName}
                 onChange={handleChange}
                 placeholder="Örn: Kahve Durağı"
-                className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                required
+                className={`w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary ${
+                  fieldErrors.restaurantName ? "border-destructive" : ""
+                }`}
                 disabled={isLoading}
               />
+              {fieldErrors.restaurantName && (
+                <p className="text-xs text-destructive">{fieldErrors.restaurantName}</p>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -141,10 +162,14 @@ export default function RegisterPage() {
                 value={formData.name}
                 onChange={handleChange}
                 placeholder="Örn: Ahmet Yılmaz"
-                className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                required
+                className={`w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary ${
+                  fieldErrors.name ? "border-destructive" : ""
+                }`}
                 disabled={isLoading}
               />
+              {fieldErrors.name && (
+                <p className="text-xs text-destructive">{fieldErrors.name}</p>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -158,10 +183,14 @@ export default function RegisterPage() {
                 value={formData.email}
                 onChange={handleChange}
                 placeholder="ornek@email.com"
-                className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                required
+                className={`w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary ${
+                  fieldErrors.email ? "border-destructive" : ""
+                }`}
                 disabled={isLoading}
               />
+              {fieldErrors.email && (
+                <p className="text-xs text-destructive">{fieldErrors.email}</p>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -175,10 +204,14 @@ export default function RegisterPage() {
                 value={formData.password}
                 onChange={handleChange}
                 placeholder="En az 6 karakter"
-                className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                required
+                className={`w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary ${
+                  fieldErrors.password ? "border-destructive" : ""
+                }`}
                 disabled={isLoading}
               />
+              {fieldErrors.password && (
+                <p className="text-xs text-destructive">{fieldErrors.password}</p>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -192,10 +225,14 @@ export default function RegisterPage() {
                 value={formData.confirmPassword}
                 onChange={handleChange}
                 placeholder="Şifrenizi tekrar girin"
-                className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                required
+                className={`w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary ${
+                  fieldErrors.confirmPassword ? "border-destructive" : ""
+                }`}
                 disabled={isLoading}
               />
+              {fieldErrors.confirmPassword && (
+                <p className="text-xs text-destructive">{fieldErrors.confirmPassword}</p>
+              )}
             </div>
 
             <Button type="submit" className="w-full" disabled={isLoading}>

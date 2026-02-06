@@ -13,6 +13,7 @@ import {
   Eye,
   EyeOff,
   Loader2,
+  Building2,
 } from "lucide-react"
 import { useFetch } from "@/hooks/use-api"
 
@@ -320,6 +321,16 @@ export default function RestaurantsPage() {
                     </td>
                   </tr>
                 ))}
+                {filteredRestaurants.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="p-12 text-center">
+                      <Building2 className="mx-auto h-12 w-12 text-slate-600" />
+                      <p className="mt-4 text-slate-400">
+                        {searchQuery ? "Arama sonucu bulunamadı" : "Henüz restoran yok"}
+                      </p>
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>

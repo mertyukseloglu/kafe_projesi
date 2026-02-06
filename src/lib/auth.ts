@@ -144,11 +144,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           throw new Error("Geçersiz şifre")
         }
 
-        // Only log in development
-        if (process.env.NODE_ENV === "development") {
-          console.log(`Demo user logged in: ${email}`)
-        }
-
         return {
           id: demoUser.id,
           email: demoUser.email,

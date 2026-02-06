@@ -3,6 +3,7 @@
 import { useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { AlertTriangle, RefreshCw, LayoutDashboard } from "lucide-react"
+import { captureError } from "@/lib/error-tracking"
 
 export default function PanelError({
   error,
@@ -12,10 +13,7 @@ export default function PanelError({
   reset: () => void
 }) {
   useEffect(() => {
-    // Log error to error reporting service in production
-    if (process.env.NODE_ENV === "production") {
-      // TODO: Send to error tracking service (e.g., Sentry)
-    }
+    captureError(error, { page: "panel" })
   }, [error])
 
   return (

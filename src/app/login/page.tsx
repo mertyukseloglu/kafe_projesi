@@ -7,6 +7,12 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Loader2, UtensilsCrossed } from "lucide-react"
+import { loginSchema } from "@/lib/validations/auth"
+
+type FieldErrors = {
+  email?: string
+  password?: string
+}
 
 function LoginForm() {
   const router = useRouter()
@@ -20,21 +26,38 @@ function LoginForm() {
   const [loginError, setLoginError] = useState<string | null>(
     error === "CredentialsSignin" ? "Geçersiz email veya şifre" : null
   )
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
     setLoginError(null)
+    setFieldErrors({})
+
+    // Zod validation
+    const result = loginSchema.safeParse({ email, password })
+    if (!result.success) {
+      const errors: FieldErrors = {}
+      result.error.issues.forEach((issue) => {
+        const field = issue.path[0] as keyof FieldErrors
+        if (!errors[field]) {
+          errors[field] = issue.message
+        }
+      })
+      setFieldErrors(errors)
+      setIsLoading(false)
+      return
+    }
 
     try {
-      const result = await signIn("credentials", {
+      const signInResult = await signIn("credentials", {
         email,
         password,
         redirect: false,
       })
 
-      if (result?.error) {
-        setLoginError(result.error)
+      if (signInResult?.error) {
+        setLoginError(signInResult.error)
         setIsLoading(false)
         return
       }
@@ -78,10 +101,14 @@ function LoginForm() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="ornek@email.com"
-                className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                required
+                className={`w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary ${
+                  fieldErrors.email ? "border-destructive" : ""
+                }`}
                 disabled={isLoading}
               />
+              {fieldErrors.email && (
+                <p className="text-xs text-destructive">{fieldErrors.email}</p>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -94,10 +121,14 @@ function LoginForm() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                required
+                className={`w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary ${
+                  fieldErrors.password ? "border-destructive" : ""
+                }`}
                 disabled={isLoading}
               />
+              {fieldErrors.password && (
+                <p className="text-xs text-destructive">{fieldErrors.password}</p>
+              )}
             </div>
 
             <Button type="submit" className="w-full" disabled={isLoading}>
